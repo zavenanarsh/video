@@ -17,8 +17,7 @@ import javax.swing.JLabel;
 import javax.swing.WindowConstants;
 
 import org.bytedeco.ffmpeg.global.avcodec;
-import org.bytedeco.javacv.FFmpegFrameRecorder;
-import org.bytedeco.javacv.Java2DFrameConverter;
+import org.bytedeco.javacv.*;
 import org.opencv.core.*;
 import org.opencv.videoio.*;
 import org.opencv.core.Mat;
@@ -71,15 +70,25 @@ public class Video {
         videoCapture.release();
 
         // process frames
-        VideoWriter videoWriter = new VideoWriter("1output.avi", -1, fps,
-                new Size(width, height));
 
-        Iterator<BufferedImage> iterator = frames.iterator();
-        while (iterator.hasNext()) {
-            Mat mat = img2Mat(iterator.next());
-            videoWriter.write(mat);
-        }
-        videoWriter.release();
+        // save video
+        FFmpegFrameRecorder recorder = new FFmpegFrameRecorder(basePath + "\\video" + ".mpeg", width, height);
+        // recorder.setFrameRate(fps);
+        // recorder.setVideoCodec(avcodec.AV_CODEC_ID_MPEG4);
+        // recorder.setVideoBitrate(9000);
+        // recorder.setFormat("mpeg");
+        // recorder.setVideoQuality(0); // maximum quality
+        // try {
+        //     recorder.start();
+        //     Java2DFrameConverter converter1 = new Java2DFrameConverter();
+        //     Iterator<BufferedImage> iterator = frames.iterator();
+        //     while (iterator.hasNext()) {
+        //         recorder.record(converter1.convert(iterator.next()));
+        //     }
+        //     recorder.stop();
+        // } catch (Exception e) {
+        //     e.printStackTrace();
+        // }
     }
 
     /**
