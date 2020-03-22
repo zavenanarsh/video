@@ -33,13 +33,14 @@ public class Video {
     }
 
     Video() {
+        System.out.println("Starting program --------------------------");
         System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
         String basePath = new File("").getAbsolutePath();
 
         String fileName = "1.avi";
         String filePath = (basePath + "\\" + fileName);
-
-        System.out.println("file path: " + filePath);
+        System.out.println("Attempting to load: " + fileName);
+        System.out.println("At file path: " + filePath);
 
         // check if file exists
         if (!Paths.get(filePath).toFile().exists()) {
@@ -52,34 +53,46 @@ public class Video {
             System.out.println("Error! file can't be opened!");
             return;
         }
+        System.out.println("File read successful --------------------------");
 
         ArrayList<BufferedImage> sourceFrames = new ArrayList<>();
         int frameCount = (int) videoCapture.get(Videoio.CAP_PROP_FRAME_COUNT);
         double fps = videoCapture.get(Videoio.CAP_PROP_FPS);
         int width = (int) videoCapture.get(Videoio.CAP_PROP_FRAME_WIDTH);
         int height = (int) videoCapture.get(Videoio.CAP_PROP_FRAME_HEIGHT);
-        System.out.println("width: " + width);
-        System.out.println("height: " + height);
-        System.out.println("fps: " + fps);
-        System.out.println("frameCount: " + frameCount);
+        int currentFrame = 0;
+        System.out.println("File info:");
+        System.out.println("\twidth: " + width);
+        System.out.println("\theight: " + height);
+        System.out.println("\tfps: " + fps);
+        System.out.println("\tnumber of frames: " + frameCount);
 
         // read in all frames
+        System.out.println("Starting to read individual frames --------------------------");
         Mat frame = new Mat();
         while (videoCapture.read(frame)) {
             sourceFrames.add(matToBuf(frame));
+            currentFrame++;
+            System.out.println("Reading frame " + currentFrame + " of " + frameCount);
         }
         videoCapture.release();
+        System.out.println("Done!");
 
         // process frames
+        System.out.println("Starting to process frames --------------------------");
         ArrayList<BufferedImage> outputFrames = new ArrayList<>();
         for (int i = 0; i < sourceFrames.size() - 1; i++) {
             BufferedImage frame1 = sourceFrames.get(i);
             BufferedImage frame2 = sourceFrames.get(i + 1);
 
             outputFrames.add(subtract(frame1, frame2));
+
+            System.out.println("Processing frame " + i + " of " + (sourceFrames.size() - 1));
         }
+        System.out.println("Done!");
 
         // save video
+        System.out.println("Saving video --------------------------");
         VideoWriter videoWriter = new VideoWriter("1output.avi", VideoWriter.fourcc('x', '2', '6', '4'), fps,
                 new Size(width, height));
 
@@ -89,6 +102,7 @@ public class Video {
             videoWriter.write(mat);
         }
         videoWriter.release();
+        System.out.println("Done!");
     }
 
     public BufferedImage subtract(BufferedImage src1, BufferedImage src2) {
