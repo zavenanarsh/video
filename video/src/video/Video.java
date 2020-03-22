@@ -8,6 +8,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Iterator;
 
 import javax.imageio.ImageIO;
 import javax.swing.ImageIcon;
@@ -19,6 +20,7 @@ import org.bytedeco.ffmpeg.global.avcodec;
 import org.bytedeco.javacv.FFmpegFrameRecorder;
 import org.bytedeco.javacv.Java2DFrameConverter;
 import org.opencv.core.*;
+import org.opencv.videoio.*;
 import org.opencv.core.Mat;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.videoio.VideoCapture;
@@ -46,19 +48,38 @@ public class Video {
         }
 
         VideoCapture videoCapture = new VideoCapture(filePath);
-
         if (!videoCapture.isOpened()) {
             System.out.println("Error! file can't be opened!");
             return;
         }
 
         ArrayList<BufferedImage> frames = new ArrayList<>();
+        int frameCount = (int) videoCapture.get(Videoio.CAP_PROP_FRAME_COUNT);
+        double fps = videoCapture.get(Videoio.CAP_PROP_FPS);
+        int width = (int) videoCapture.get(Videoio.CAP_PROP_FRAME_WIDTH);
+        int height = (int) videoCapture.get(Videoio.CAP_PROP_FRAME_HEIGHT);
+        System.out.println("width: " + width);
+        System.out.println("height: " + height);
+        System.out.println("fps: " + fps);
+        System.out.println("frameCount: " + frameCount);
 
         // read in all frames
         Mat frame = new Mat();
         while (videoCapture.read(frame)) {
             frames.add(mat2Img(frame));
         }
+        videoCapture.release();
+
+        // process frames
+        VideoWriter videoWriter = new VideoWriter("1output.avi", -1, fps,
+                new Size(width, height));
+
+        Iterator<BufferedImage> iterator = frames.iterator();
+        while (iterator.hasNext()) {
+            Mat mat = img2Mat(iterator.next());
+            videoWriter.write(mat);
+        }
+        videoWriter.release();
     }
 
     /**
