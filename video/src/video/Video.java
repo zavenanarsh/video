@@ -87,7 +87,7 @@ public class Video {
 
             outputFrames.add(subtract(frame1, frame2));
 
-            System.out.println("Processing frame " + i + " of " + (sourceFrames.size() - 1));
+            System.out.println("Processing frame " + (i+1) + " of " + (sourceFrames.size() - 1));
         }
         System.out.println("Done!");
 
