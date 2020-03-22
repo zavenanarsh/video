@@ -17,6 +17,7 @@ import javax.swing.JLabel;
 import javax.swing.WindowConstants;
 
 import org.bytedeco.ffmpeg.global.avcodec;
+import org.bytedeco.ffmpeg.global.avutil;
 import org.bytedeco.javacv.*;
 import org.opencv.core.*;
 import org.opencv.videoio.*;
@@ -65,197 +66,82 @@ public class Video {
         // read in all frames
         Mat frame = new Mat();
         while (videoCapture.read(frame)) {
-            frames.add(mat2Img(frame));
+            frames.add(matToBuf(frame));
         }
         videoCapture.release();
 
         // process frames
 
         // save video
-        FFmpegFrameRecorder recorder = new FFmpegFrameRecorder(basePath + "\\video" + ".mpeg", width, height);
+        // FFmpegFrameRecorder recorder = new FFmpegFrameRecorder(basePath + "\\video" +
+        // ".mpeg", width, height);
         // recorder.setFrameRate(fps);
         // recorder.setVideoCodec(avcodec.AV_CODEC_ID_MPEG4);
         // recorder.setVideoBitrate(9000);
         // recorder.setFormat("mpeg");
         // recorder.setVideoQuality(0); // maximum quality
         // try {
-        //     recorder.start();
-        //     Java2DFrameConverter converter1 = new Java2DFrameConverter();
-        //     Iterator<BufferedImage> iterator = frames.iterator();
-        //     while (iterator.hasNext()) {
-        //         recorder.record(converter1.convert(iterator.next()));
-        //     }
-        //     recorder.stop();
-        // } catch (Exception e) {
-        //     e.printStackTrace();
+        // recorder.start();
+        // Java2DFrameConverter converter1 = new Java2DFrameConverter();
+        // Iterator<BufferedImage> iterator = frames.iterator();
+        // while (iterator.hasNext()) {
+        // recorder.record(converter1.convert(iterator.next()));
         // }
-    }
+        // recorder.stop();
+        // } catch (Exception e) {
+        // e.printStackTrace();
+        // }
 
-    /**
-     * https://www.codeproject.com/Tips/752511/How-to-Convert-Mat-to-BufferedImage-Vice-Versa
-     * 
-     * @param in
-     * @return
-     */
-    public static BufferedImage mat2Img(Mat in) {
-        BufferedImage out;
-        byte[] data = new byte[320 * 240 * (int) in.elemSize()];
-        int type;
-        in.get(0, 0, data);
+        System.out.println(frames.get(0).getWidth());
+        System.out.println(frames.get(0).getHeight());
 
-        if (in.channels() == 1)
-            type = BufferedImage.TYPE_BYTE_GRAY;
-        else
-            type = BufferedImage.TYPE_3BYTE_BGR;
+        VideoWriter videoWriter = new VideoWriter("1output.avi", VideoWriter.fourcc('x', '2', '6', '4'), fps,
+                new Size(width, height));
 
-        out = new BufferedImage(320, 240, type);
-
-        out.getRaster().setDataElements(0, 0, 320, 240, data);
-        return out;
-    }
-
-    /**
-     * https://www.codeproject.com/Tips/752511/How-to-Convert-Mat-to-BufferedImage-Vice-Versa
-     * 
-     * @param in
-     * @return
-     */
-    public static Mat img2Mat(BufferedImage in) {
-        Mat out;
-        byte[] data;
-        int r, g, b;
-
-        if (in.getType() == BufferedImage.TYPE_INT_RGB) {
-            out = new Mat(240, 320, CvType.CV_8UC3);
-            data = new byte[320 * 240 * (int) out.elemSize()];
-            int[] dataBuff = in.getRGB(0, 0, 320, 240, null, 0, 320);
-            for (int i = 0; i < dataBuff.length; i++) {
-                data[i * 3] = (byte) ((dataBuff[i] >> 16) & 0xFF);
-                data[i * 3 + 1] = (byte) ((dataBuff[i] >> 8) & 0xFF);
-                data[i * 3 + 2] = (byte) ((dataBuff[i] >> 0) & 0xFF);
-            }
-        } else {
-            out = new Mat(240, 320, CvType.CV_8UC1);
-            data = new byte[320 * 240 * (int) out.elemSize()];
-            int[] dataBuff = in.getRGB(0, 0, 320, 240, null, 0, 320);
-            for (int i = 0; i < dataBuff.length; i++) {
-                r = (byte) ((dataBuff[i] >> 16) & 0xFF);
-                g = (byte) ((dataBuff[i] >> 8) & 0xFF);
-                b = (byte) ((dataBuff[i] >> 0) & 0xFF);
-                data[i] = (byte) ((0.21 * r) + (0.71 * g) + (0.07 * b)); // luminosity
-            }
+        Iterator<BufferedImage> iterator = frames.iterator();
+        while (iterator.hasNext()) {
+            Mat mat = bufToMat(iterator.next());
+            videoWriter.write(mat);
         }
+        videoWriter.release();
+    }
+
+    /**
+     * https://riptutorial.com/opencv/example/21963/converting-an-mat-object-to-an-bufferedimage-object
+     * 
+     * @param in
+     * @return
+     */
+    private BufferedImage matToBuf(Mat in) {
+        if (!in.empty()) {
+            int type = BufferedImage.TYPE_BYTE_GRAY;
+            if (in.channels() > 1) {
+                type = BufferedImage.TYPE_3BYTE_BGR;
+            }
+            int bufferSize = in.channels() * in.cols() * in.rows();
+            byte[] b = new byte[bufferSize];
+            in.get(0, 0, b); // get all the pixels
+            BufferedImage out = new BufferedImage(in.cols(), in.rows(), type);
+            final byte[] targetPixels = ((DataBufferByte) out.getRaster().getDataBuffer()).getData();
+            System.arraycopy(b, 0, targetPixels, 0, b.length);
+            return out;
+        }
+
+        return null;
+    }
+
+    /**
+     * https://stackoverflow.com/questions/14958643/converting-bufferedimage-to-mat-in-opencv
+     * 
+     * @param in
+     * @return
+     */
+    public static Mat bufToMat(BufferedImage in) {
+        Mat out = new Mat(in.getHeight(), in.getWidth(), CvType.CV_8UC3);
+        byte[] data = ((DataBufferByte) in.getRaster().getDataBuffer()).getData();
         out.put(0, 0, data);
         return out;
     }
-
-    // // reading the frames
-    // System.out.println(video_length + " Frames extracted");
-
-    // BufferedImage bufferedImage = matToBufferedImage(frame);
-    // showWindow(bufferedImage);
-    // camera.release();
-
-    // // read the previously extracted frames that were saved and load it in the
-    // array
-    // BufferedImage[] bImg = new BufferedImage[video_length];
-    // for (int i = 0; i < video_length - 1; i++) {
-    // try {
-    // bImg[i] = ImageIO.read(new File(basePath + "\\output\\" + i + ".jpg"));
-
-    // } catch (Exception e) {
-    // System.out.println("Cannot load the provided image");
-    // }
-    // }
-
-    // // save file as image
-    // File outputfile;
-    // for (int x = 0; x < bImg.length - 1; x++) {
-    // outputfile = new File(basePath + "\\output\\" + x + "s.png");
-    // // use subtract method for images
-    // try {
-    // ImageIO.write(bImg[x], "png", outputfile);
-    // } catch (IOException e) {
-    // // TODO Auto-generated catch block
-    // e.printStackTrace();
-    // }
-
-    // }
-
-    // // method to save images as movie
-    // convertJPGtoMovie(bImg, basePath + "\\output\\");
-
-    // }
-
-    // public BufferedImage subtract(int height, int width, int imageType, int
-    // length, BufferedImage[] src, int x) {
-    // BufferedImage result = new BufferedImage(width, height, imageType);
-
-    // for (int i = 0; i < width; i++) {
-    // for (int j = 0; j < height; j++) {
-
-    // int red = getRed(src[x].getRGB(i, j)) - getRed(src[x].getRGB(i, j));
-    // int green = getGreen(src[x].getRGB(i, j)) - getGreen(src[x].getRGB(i, j));
-    // int blue = getBlue(src[x].getRGB(i, j)) - getBlue(src[x].getRGB(i, j));
-    // result.setRGB(i, j, new Color(red, green, blue).getRGB());
-
-    // }
-    // }
-
-    // return result;
-    // }
-
-    // //
-    // protected int getRed(int pixel) {
-    // return (pixel >>> 16) & 0xFF;
-    // }
-
-    // protected int getGreen(int pixel) {
-    // return (pixel >>> 8) & 0xFF;
-    // }
-
-    // protected int getBlue(int pixel) {
-    // return pixel & 0xFF;
-    // }
-
-    // public static void convertJPGtoMovie(BufferedImage[] links, String vidPath) {
-
-    // FFmpegFrameRecorder recorder = new FFmpegFrameRecorder(vidPath + "video" +
-    // ".mpeg", 640, 720);
-    // try {
-    // recorder.setFrameRate(1);
-    // recorder.setVideoCodec(avcodec.AV_CODEC_ID_MPEG4);
-    // recorder.setVideoBitrate(9000);
-    // recorder.setFormat("mpeg");
-    // recorder.setVideoQuality(0); // maximum quality
-    // recorder.start();
-    // for (int i = 0; i < links.length; i++) {
-    // Java2DFrameConverter converter1 = new Java2DFrameConverter();
-
-    // recorder.record(converter1.convert(links[i]));
-    // }
-    // recorder.stop();
-    // } catch (org.bytedeco.javacv.FrameRecorder.Exception e) {
-    // e.printStackTrace();
-    // }
-
-    // }
-
-    // private static BufferedImage matToBufferedImage(Mat frame) {
-    // int type = 0;
-    // if (frame.channels() == 1) {
-    // type = BufferedImage.TYPE_BYTE_GRAY;
-    // } else if (frame.channels() == 3) {
-    // type = BufferedImage.TYPE_3BYTE_BGR;
-    // }
-    // BufferedImage image = new BufferedImage(frame.width(), frame.height(), type);
-    // WritableRaster raster = image.getRaster();
-    // DataBufferByte dataBuffer = (DataBufferByte) raster.getDataBuffer();
-    // byte[] data = dataBuffer.getData();
-    // frame.get(0, 0, data);
-
-    // return image;
-    // }
 
     // private static void showWindow(BufferedImage img) {
     // JFrame frame = new JFrame();
