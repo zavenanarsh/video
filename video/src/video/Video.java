@@ -1,6 +1,13 @@
 package video;
 
+import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.Graphics;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 import java.awt.image.WritableRaster;
@@ -12,9 +19,18 @@ import java.util.Iterator;
 
 import javax.imageio.ImageIO;
 import javax.swing.ImageIcon;
+import javax.swing.JButton;
+import javax.swing.JCheckBox;
+import javax.swing.JDialog;
+import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JRadioButton;
+import javax.swing.JRadioButtonMenuItem;
 import javax.swing.WindowConstants;
+import javax.swing.filechooser.FileNameExtensionFilter;
+import javax.swing.filechooser.FileSystemView;
 
 import org.bytedeco.ffmpeg.global.avcodec;
 import org.bytedeco.ffmpeg.global.avutil;
@@ -27,82 +43,89 @@ import org.opencv.videoio.VideoCapture;
 import org.opencv.videoio.Videoio;
 
 public class Video {
+	
+boolean removeRed, removeGreen, removeBlue;
+
 
     public static void main(String[] args) {
         new Video();
     }
 
     Video() {
-        System.out.println("Starting program --------------------------");
-        System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
-        String basePath = new File("").getAbsolutePath();
-
-        String fileName = "1.avi";
-        String filePath = (basePath + "\\" + fileName);
-        System.out.println("Attempting to load: " + fileName);
-        System.out.println("At file path: " + filePath);
-
-        // check if file exists
-        if (!Paths.get(filePath).toFile().exists()) {
-            System.out.println(fileName + " does not exit!");
-            return;
-        }
-
-        VideoCapture videoCapture = new VideoCapture(filePath);
-        if (!videoCapture.isOpened()) {
-            System.out.println("Error! file can't be opened!");
-            return;
-        }
-        System.out.println("File read successful --------------------------");
-
-        ArrayList<BufferedImage> sourceFrames = new ArrayList<>();
-        int frameCount = (int) videoCapture.get(Videoio.CAP_PROP_FRAME_COUNT);
-        double fps = videoCapture.get(Videoio.CAP_PROP_FPS);
-        int width = (int) videoCapture.get(Videoio.CAP_PROP_FRAME_WIDTH);
-        int height = (int) videoCapture.get(Videoio.CAP_PROP_FRAME_HEIGHT);
-        int currentFrame = 0;
-        System.out.println("File info:");
-        System.out.println("\twidth: " + width);
-        System.out.println("\theight: " + height);
-        System.out.println("\tfps: " + fps);
-        System.out.println("\tnumber of frames: " + frameCount);
-
-        // read in all frames
-        System.out.println("Starting to read individual frames --------------------------");
-        Mat frame = new Mat();
-        while (videoCapture.read(frame)) {
-            sourceFrames.add(matToBuf(frame));
-            currentFrame++;
-            System.out.println("Reading frame " + currentFrame + " of " + frameCount);
-        }
-        videoCapture.release();
-        System.out.println("Done!");
-
-        // process frames
-        System.out.println("Starting to process frames --------------------------");
-        ArrayList<BufferedImage> outputFrames = new ArrayList<>();
-        for (int i = 0; i < sourceFrames.size() - 1; i++) {
-            BufferedImage frame1 = sourceFrames.get(i);
-            BufferedImage frame2 = sourceFrames.get(i + 1);
-
-            outputFrames.add(subtract(frame1, frame2));
-
-            System.out.println("Processing frame " + (i+1) + " of " + (sourceFrames.size() - 1));
-        }
-        System.out.println("Done!");
-
-        // save video
-        System.out.println("Saving video --------------------------");
-        VideoWriter videoWriter = new VideoWriter("1output.avi", VideoWriter.fourcc('x', '2', '6', '4'), fps,
-                new Size(width, height));
-
-        Iterator<BufferedImage> iterator = outputFrames.iterator();
-        while (iterator.hasNext()) {
-            Mat mat = bufToMat(iterator.next());
-            videoWriter.write(mat);
-        }
-        videoWriter.release();
-        System.out.println("Done!");
+    	
+    	UI();
+    	
+    	    			
+//        System.out.println("Starting program --------------------------");
+//        System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+//        String basePath = new File("").getAbsolutePath();
+//
+//        String fileName = "2.avi";
+//        String filePath = (basePath + "\\" + fileName);
+//        System.out.println("Attempting to load: " + fileName);
+//        System.out.println("At file path: " + filePath);
+//
+//        // check if file exists
+//        if (!Paths.get(filePath).toFile().exists()) {
+//            System.out.println(fileName + " does not exit!");
+//            return;
+//        }
+//
+//        VideoCapture videoCapture = new VideoCapture(filePath);
+//        if (!videoCapture.isOpened()) {
+//            System.out.println("Error! file can't be opened!");
+//            return;
+//        }
+//        System.out.println("File read successful --------------------------");
+//
+//        ArrayList<BufferedImage> sourceFrames = new ArrayList<>();
+//        int frameCount = (int) videoCapture.get(Videoio.CAP_PROP_FRAME_COUNT);
+//        double fps = videoCapture.get(Videoio.CAP_PROP_FPS);
+//        int width = (int) videoCapture.get(Videoio.CAP_PROP_FRAME_WIDTH);
+//        int height = (int) videoCapture.get(Videoio.CAP_PROP_FRAME_HEIGHT);
+//        int currentFrame = 0;
+//        System.out.println("File info:");
+//        System.out.println("\twidth: " + width);
+//        System.out.println("\theight: " + height);
+//        System.out.println("\tfps: " + fps);
+//        System.out.println("\tnumber of frames: " + frameCount);
+//
+//        // read in all frames
+//        System.out.println("Starting to read individual frames --------------------------");
+//        Mat frame = new Mat();
+//        while (videoCapture.read(frame)) {
+//            sourceFrames.add(matToBuf(frame));
+//            currentFrame++;
+//            System.out.println("Reading frame " + currentFrame + " of " + frameCount);
+//        }
+//        videoCapture.release();
+//        System.out.println("Done!");
+//
+//        // process frames
+//        System.out.println("Starting to process frames --------------------------");
+//        ArrayList<BufferedImage> outputFrames = new ArrayList<>();
+//        for (int i = 0; i < sourceFrames.size() - 1; i++) {
+//            BufferedImage frame1 = sourceFrames.get(i);
+//            BufferedImage frame2 = sourceFrames.get(i + 1);
+//
+//            outputFrames.add(subtract(frame1, frame2));
+//
+//            System.out.println("Processing frame " + (i+1) + " of " + (sourceFrames.size() - 1));
+//        }
+//        System.out.println("Done!");
+//
+//        // save video
+//        System.out.println("Saving video --------------------------");
+//        VideoWriter videoWriter = new VideoWriter("1output.avi", VideoWriter.fourcc('x', '2', '6', '4'), fps,
+//                new Size(width, height));
+//
+//        Iterator<BufferedImage> iterator = outputFrames.iterator();
+//        while (iterator.hasNext()) {
+//            Mat mat = bufToMat(iterator.next());
+//            videoWriter.write(mat);
+//        }
+//        videoWriter.release();
+//        System.out.println("Done!");
     }
 
     public BufferedImage subtract(BufferedImage src1, BufferedImage src2) {
@@ -127,7 +150,8 @@ public class Video {
         }
         return out;
     }
-
+    
+   
     public int clamp(int in) {
         in = in > 255 ? 255 : in;
         in = in < 0 ? 0 : in;
@@ -171,13 +195,130 @@ public class Video {
         return out;
     }
 
-    private static void showWindow(BufferedImage img) {
-        JFrame frame = new JFrame();
-        frame.getContentPane().add(new JLabel(new ImageIcon(img)));
-        frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
-        frame.setSize(img.getWidth() / 2, img.getHeight() / 2 + 30);
-        frame.setTitle("Image captured");
-        frame.setVisible(true);
+    public void difference(int r, int g, int b) {
+    	if (removeRed == true) {
+    		if (r > g) {
+    			r = g;
+    		}
+    	}
+    	
+    	if (removeGreen == true) {
+    		if (g > r) {
+    			g = r;
+    		}
+    	}
+    	
+    	if (removeBlue == true) {
+    		if (b > g) {
+    			b = g;
+    		}
+    	}
     }
+    
+    public void UI() {
+    	
+    	JFrame frame = new JFrame();
+    	frame.setSize(1000, 500);
+        frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+        frame.setLocationRelativeTo(null);
+        frame.setTitle("Image captured");
+        
+        
+		
+		JButton choose = new JButton("Choose Video");
+		JButton button = new JButton("Motion Detect!");
+		JCheckBox red = new JCheckBox("Red"); 
+		JCheckBox green = new JCheckBox("Green");  
+		JCheckBox blue = new JCheckBox("Blue");  
+		JLabel difference = new JLabel("Select a colour to use the difference colour method.");  
+
+
+		button.setPreferredSize(new Dimension(150, 50));
+		choose.setPreferredSize(new Dimension(150, 50));
+		red.setPreferredSize(new Dimension(50, 50));
+		green.setPreferredSize(new Dimension(70, 50));
+		blue.setPreferredSize(new Dimension(50, 50));
+		difference.setPreferredSize(new Dimension(300, 50));
+
+
+		JPanel panel = new JPanel();
+		
+		
+		panel.add(choose);
+		panel.add(difference);
+		panel.add(red);
+		panel.add(green);
+		panel.add(blue);
+		panel.add(button);
+
+
+		frame.add(panel , BorderLayout.CENTER);
+		
+		choose.addActionListener(new ActionListener()
+		{
+			  public void actionPerformed(ActionEvent e)
+			  {
+				// FileChooser
+
+			        JFileChooser jfc = new JFileChooser(FileSystemView.getFileSystemView().getHomeDirectory());
+
+					int returnValue = jfc.showOpenDialog(null);
+					// int returnValue = jfc.showSaveDialog(null);
+
+					if (returnValue == JFileChooser.APPROVE_OPTION) {
+						File selectedFile = jfc.getSelectedFile();
+						System.out.println(selectedFile.getAbsolutePath());
+					}
+			  }
+			});
+		button.addActionListener(new ActionListener()
+		{
+			  public void actionPerformed(ActionEvent e)
+			  {
+			    // display/center the jdialog when the button is pressed
+			    JDialog d = new JDialog(frame, "Starting...", true);
+			    d.setLocationRelativeTo(frame);
+			    d.setVisible(true);
+			    //close JFrame
+			    frame.dispose();
+			  }
+			});
+		
+		removeRed = false;
+		removeGreen = false;
+		removeBlue = false;
+
+		
+		red.addActionListener(new ActionListener()
+		{
+			  public void actionPerformed(ActionEvent e)
+			  {
+					removeRed = true;
+
+			  }
+			});
+		green.addActionListener(new ActionListener()
+		{
+			  public void actionPerformed(ActionEvent e)
+			  {
+					removeGreen = true;
+
+			  }
+			});
+		
+		blue.addActionListener(new ActionListener()
+		{
+			  public void actionPerformed(ActionEvent e)
+			  {
+					removeBlue = true;
+
+			  }
+			});
+		
+        frame.setVisible(true);
+
+    }
+    
+    
 
 }
