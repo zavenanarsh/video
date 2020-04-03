@@ -1,5 +1,7 @@
 package video;
 
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -54,6 +56,8 @@ public class Video {
 
 	BufferedImage showFrame;
 
+	GridBagConstraints gbc = new GridBagConstraints();
+
 	String basePath;
 	String tempPath;
 
@@ -70,24 +74,18 @@ public class Video {
 		basePath = new File("").getAbsolutePath();
 		tempPath = basePath + "\\temp";
 
-		slider = new JSlider();
+		slider = initSlider();
+
+		UI();
+	}
+
+	public JSlider initSlider() {
+		JSlider slider = new JSlider();
 		slider.addChangeListener(new ChangeListener() {
 
 			@Override
 			public void stateChanged(ChangeEvent e) {
-				Thread thread = new Thread() {
-					@Override
-					public void run() {
-						try {
-							showFrame = ImageIO.read(new File(tempPath + "\\in-" + slider.getValue() + ".png"));
-							visibleFrame.repaint();
-						} catch (Exception e) {
-							e.printStackTrace();
-						}
-
-					}
-				};
-				thread.start();
+				showFrame(slider.getValue());
 			}
 		});
 		slider.setMinimum(0);
@@ -95,13 +93,27 @@ public class Video {
 		slider.setMajorTickSpacing(10);
 		slider.setPaintTicks(true);
 		slider.setPaintLabels(true);
+		return slider;
+	}
 
-		UI();
+	public void showFrame(int index) {
+		Thread thread = new Thread() {
+			@Override
+			public void run() {
+				try {
+					showFrame = ImageIO.read(new File(tempPath + "\\in-" + index + ".png"));
+					visibleFrame.repaint();
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+		};
+		thread.start();
 	}
 
 	public void loadVideo(String filePath) {
 
-		Thread run = new Thread() {
+		Thread thread = new Thread() {
 			@Override
 			public void run() {
 				System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
@@ -118,6 +130,7 @@ public class Video {
 					return;
 				}
 
+				// set video pram
 				frameCount = (int) videoCapture.get(Videoio.CAP_PROP_FRAME_COUNT);
 				fps = videoCapture.get(Videoio.CAP_PROP_FPS);
 				width = (int) videoCapture.get(Videoio.CAP_PROP_FRAME_WIDTH);
@@ -147,7 +160,7 @@ public class Video {
 				System.out.println("Done!");
 			}
 		};
-		run.start();
+		thread.start();
 
 		// processVideo();
 	}
@@ -233,43 +246,6 @@ public class Video {
 		return in;
 	}
 
-	/**
-	 * https://riptutorial.com/opencv/example/21963/converting-an-mat-object-to-an-bufferedimage-object
-	 * 
-	 * @param in
-	 * @return
-	 */
-	private BufferedImage matToBuf(Mat in) {
-		if (!in.empty()) {
-			int type = BufferedImage.TYPE_BYTE_GRAY;
-			if (in.channels() > 1) {
-				type = BufferedImage.TYPE_3BYTE_BGR;
-			}
-			int bufferSize = in.channels() * in.cols() * in.rows();
-			byte[] b = new byte[bufferSize];
-			in.get(0, 0, b); // get all the pixels
-			BufferedImage out = new BufferedImage(in.cols(), in.rows(), type);
-			final byte[] targetPixels = ((DataBufferByte) out.getRaster().getDataBuffer()).getData();
-			System.arraycopy(b, 0, targetPixels, 0, b.length);
-			return out;
-		}
-
-		return null;
-	}
-
-	/**
-	 * https://stackoverflow.com/questions/14958643/converting-bufferedimage-to-mat-in-opencv
-	 * 
-	 * @param in
-	 * @return
-	 */
-	public static Mat bufToMat(BufferedImage in) {
-		Mat out = new Mat(in.getHeight(), in.getWidth(), CvType.CV_8UC3);
-		byte[] data = ((DataBufferByte) in.getRaster().getDataBuffer()).getData();
-		out.put(0, 0, data);
-		return out;
-	}
-
 	public void difference(int r, int g, int b) {
 		if (removeRed == true) {
 			if (r > g) {
@@ -297,7 +273,7 @@ public class Video {
 		frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 		frame.setLocationRelativeTo(null);
 		frame.setTitle("Image captured");
-		frame.setLayout(new BoxLayout(frame.getContentPane(), BoxLayout.Y_AXIS));
+		frame.setLayout(new GridBagLayout());
 
 		JButton choose = new JButton("Load Video");
 		JButton button = new JButton("Motion Detect!");
@@ -305,7 +281,8 @@ public class Video {
 		JCheckBox green = new JCheckBox("Green");
 		JCheckBox blue = new JCheckBox("Blue");
 		JCheckBox viewFiltered = new JCheckBox("View Filtered");
-		JLabel difference = new JLabel("Select a colour to use the difference colour method.");
+		// JLabel difference = new JLabel("Select a colour to use the difference colour
+		// method.");
 
 		JPanel panel = new JPanel();
 		panel.add(choose);
@@ -317,25 +294,27 @@ public class Video {
 			@Override
 			protected void paintComponent(Graphics g) {
 				super.paintComponent(g);
-				int newWidth = 0;
-				int newHeight = 0;
-				if (((double) width) / height > ((double) getSize().width) / getSize().height) {
-					newWidth = getSize().width;
-					double scale = ((double) width) / newWidth;
-					newHeight = (int) (height / scale);
-				} else {
-					newHeight = getSize().height;
-					double scale = ((double) height) / newHeight;
-					newWidth = (int) (width / scale);
-				}
-
-				g.drawImage(showFrame, 0, 0, newWidth, newHeight, this); // see javadoc for more info on the parameters
+				draw(g, this);
 			}
 		};
-
-		frame.add(panel);
-		frame.add(visibleFrame);
-		frame.add(slider);
+		gbc.gridx = 0;
+		gbc.gridy = 0;
+		gbc.weighty = 0;
+		gbc.weightx = 1;
+		gbc.fill = GridBagConstraints.HORIZONTAL;
+		frame.add(panel, gbc);
+		gbc.gridx = 0;
+		gbc.gridy = 1;
+		gbc.weighty = 1;
+		gbc.weightx = 1;
+		gbc.fill = GridBagConstraints.BOTH;
+		frame.add(visibleFrame, gbc);
+		gbc.gridx = 0;
+		gbc.gridy = 2;
+		gbc.weighty = 0;
+		gbc.weightx = 1;
+		gbc.fill = GridBagConstraints.HORIZONTAL;
+		frame.add(slider, gbc);
 
 		choose.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
@@ -387,6 +366,23 @@ public class Video {
 
 		frame.setVisible(true);
 
+	}
+
+	void draw(Graphics g, JPanel panel) {
+		int newWidth = 0;
+		int newHeight = 0;
+		if (((double) width) / height > ((double) panel.getSize().width) / panel.getSize().height) {
+			newWidth = panel.getSize().width;
+			double scale = ((double) width) / newWidth;
+			newHeight = (int) (height / scale);
+		} else {
+			newHeight = panel.getSize().height;
+			double scale = ((double) height) / newHeight;
+			newWidth = (int) (width / scale);
+		}
+		int cx = panel.getSize().width/2-newWidth/2;
+		int cy = panel.getSize().height/2-newHeight/2;
+		g.drawImage(showFrame, cx, cy, newWidth, newHeight, panel); // see javadoc for more info on the parameters
 	}
 
 }
