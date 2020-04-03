@@ -49,8 +49,12 @@ public class Video {
 	int width, height, frameCount, currentFrame;
 	double fps;
 
-	ArrayList<BufferedImage> outputFrames;
-	ArrayList<BufferedImage> sourceFrames;
+	BufferedImage showFrame;
+
+	JPanel visibleFrame;
+
+	String basePath;
+	String tempPath;
 
 	public static void main(String[] args) {
 		new Video();
@@ -58,23 +62,19 @@ public class Video {
 
 	Video() {
 
+		basePath = new File("").getAbsolutePath();
+		tempPath = basePath + "\\temp";
+
 		UI();
 	}
 
-	public void loadVideo() {
+	public void loadVideo(String filePath) {
 
-		System.out.println("Starting program --------------------------");
 		System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
-		String basePath = new File("").getAbsolutePath();
-
-		String fileName = "2.avi";
-		String filePath = (basePath + "\\" + fileName);
-		System.out.println("Attempting to load: " + fileName);
-		System.out.println("At file path: " + filePath);
 
 		// check if file exists
 		if (!Paths.get(filePath).toFile().exists()) {
-			System.out.println(fileName + " does not exit!");
+			System.out.println(filePath + " does not exit!");
 			return;
 		}
 
@@ -83,57 +83,81 @@ public class Video {
 			System.out.println("Error! file can't be opened!");
 			return;
 		}
-		System.out.println("File read successful --------------------------");
 
-		sourceFrames = new ArrayList<>();
 		frameCount = (int) videoCapture.get(Videoio.CAP_PROP_FRAME_COUNT);
 		fps = videoCapture.get(Videoio.CAP_PROP_FPS);
 		width = (int) videoCapture.get(Videoio.CAP_PROP_FRAME_WIDTH);
 		height = (int) videoCapture.get(Videoio.CAP_PROP_FRAME_HEIGHT);
 		currentFrame = 0;
-		System.out.println("File info:");
-		System.out.println("\twidth: " + width);
-		System.out.println("\theight: " + height);
-		System.out.println("\tfps: " + fps);
-		System.out.println("\tnumber of frames: " + frameCount);
+
+		// make output folder if does not exist
+		File dir = new File(tempPath);
+		if (!dir.exists()) {
+			dir.mkdir();
+		}
 
 		// read in all frames
-		System.out.println("Starting to read individual frames --------------------------");
 		Mat frame = new Mat();
 		while (videoCapture.read(frame)) {
-			sourceFrames.add(matToBuf(frame));
+			
+			Imgcodecs.imwrite(tempPath + "\\in-" + currentFrame + ".png", frame);
+			
+			System.out.println("Reading frame " + currentFrame + " of " + (frameCount-1));
 			currentFrame++;
-			System.out.println("Reading frame " + currentFrame + " of " + frameCount);
 		}
 		videoCapture.release();
 		System.out.println("Done!");
+
+		processVideo();
 	}
 
 	public void processVideo() {
 		// process frames
+
+		ArrayList<BufferedImage> frames = new ArrayList<>();
+		
+		try {
+			frames.add(ImageIO.read(new File(tempPath + "\\in-0.png")));
+			
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 		System.out.println("Starting to process frames --------------------------");
-		outputFrames = new ArrayList<>();
-		for (int i = 0; i < sourceFrames.size() - 1; i++) {
-			BufferedImage frame1 = sourceFrames.get(i);
-			BufferedImage frame2 = sourceFrames.get(i + 1);
+		for (int i = 0; i < frameCount - 1; i++) {
+			try {
+				frames.add(ImageIO.read(new File(tempPath + "\\in-" + (i + 1) + ".png")));
 
-			outputFrames.add(subtract(frame1, frame2));
+				while (frames.size() > 2) {
+					frames.remove(0);
+				}
 
-			System.out.println("Processing frame " + (i + 1) + " of " + (sourceFrames.size() - 1));
+				File outputFile = new File(tempPath + "\\out-" + i + ".png");
+				ImageIO.write(subtract(frames.get(0), frames.get(1)), "png", outputFile);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+
+			System.out.println("Processing frame " + (i + 1) + " of " + (frameCount - 1));
 		}
 		System.out.println("Done!");
+
+		saveVideo();
 	}
 
 	public void saveVideo() {
 		// save video
 		System.out.println("Saving video --------------------------");
-		VideoWriter videoWriter = new VideoWriter("1output.avi", VideoWriter.fourcc('x', '2', '6', '4'), fps,
+		VideoWriter videoWriter = new VideoWriter("output.avi", VideoWriter.fourcc('x', '2', '6', '4'), fps,
 				new Size(width, height));
 
-		Iterator<BufferedImage> iterator = outputFrames.iterator();
-		while (iterator.hasNext()) {
-			Mat mat = bufToMat(iterator.next());
-			videoWriter.write(mat);
+		for (int i = 0; i < frameCount - 1; i++) {
+			try {
+				Mat mat = Imgcodecs.imread(tempPath + "\\out-" + i + ".png");
+				videoWriter.write(mat);
+
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
 		}
 		videoWriter.release();
 		System.out.println("Done!");
@@ -232,7 +256,7 @@ public class Video {
 		frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 		frame.setLocationRelativeTo(null);
 		frame.setTitle("Image captured");
-		frame.setLayout(new BoxLayout(frame, BoxLayout.Y_AXIS));
+		frame.setLayout(new BoxLayout(frame.getContentPane(), BoxLayout.Y_AXIS));
 
 		JButton choose = new JButton("Choose Video");
 		JButton button = new JButton("Motion Detect!");
@@ -249,15 +273,23 @@ public class Video {
 		difference.setPreferredSize(new Dimension(300, 50));
 
 		JPanel panel = new JPanel();
+		visibleFrame = new JPanel() {
+			@Override
+			protected void paintComponent(Graphics g) {
+				super.paintComponent(g);
+				g.drawImage(showFrame, 0, 0, this); // see javadoc for more info on the parameters
+			}
+		};
 
 		panel.add(choose);
-		panel.add(difference);
-		panel.add(red);
-		panel.add(green);
-		panel.add(blue);
-		panel.add(button);
+		// panel.add(difference);
+		// panel.add(red);
+		// panel.add(green);
+		// panel.add(blue);
+		// panel.add(button);
 
-		frame.add(panel, BorderLayout.CENTER);
+		frame.add(panel);
+		frame.add(visibleFrame);
 
 		choose.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
@@ -270,7 +302,7 @@ public class Video {
 
 				if (returnValue == JFileChooser.APPROVE_OPTION) {
 					File selectedFile = jfc.getSelectedFile();
-					System.out.println(selectedFile.getAbsolutePath());
+					loadVideo(selectedFile.getAbsolutePath());
 				}
 			}
 		});

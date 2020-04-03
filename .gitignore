@@ -1,1 +1,4 @@
 video/.vscode/settings.json
+video/bin/video/*
+video/temp
+video/output.avi
