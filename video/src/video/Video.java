@@ -29,7 +29,10 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
 import javax.swing.JRadioButtonMenuItem;
+import javax.swing.JSlider;
 import javax.swing.WindowConstants;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.filechooser.FileSystemView;
 
@@ -45,16 +48,18 @@ import org.opencv.videoio.Videoio;
 
 public class Video {
 
-	boolean removeRed, removeGreen, removeBlue;
+	boolean removeRed, removeGreen, removeBlue, showFiltered;
 	int width, height, frameCount, currentFrame;
 	double fps;
 
 	BufferedImage showFrame;
 
-	JPanel visibleFrame;
-
 	String basePath;
 	String tempPath;
+
+	JPanel visibleFrame;
+
+	JSlider slider;
 
 	public static void main(String[] args) {
 		new Video();
@@ -65,60 +70,96 @@ public class Video {
 		basePath = new File("").getAbsolutePath();
 		tempPath = basePath + "\\temp";
 
+		slider = new JSlider();
+		slider.addChangeListener(new ChangeListener() {
+
+			@Override
+			public void stateChanged(ChangeEvent e) {
+				Thread thread = new Thread() {
+					@Override
+					public void run() {
+						try {
+							showFrame = ImageIO.read(new File(tempPath + "\\in-" + slider.getValue() + ".png"));
+							visibleFrame.repaint();
+						} catch (Exception e) {
+							e.printStackTrace();
+						}
+
+					}
+				};
+				thread.start();
+			}
+		});
+		slider.setMinimum(0);
+		slider.setMinorTickSpacing(1);
+		slider.setMajorTickSpacing(10);
+		slider.setPaintTicks(true);
+		slider.setPaintLabels(true);
+
 		UI();
 	}
 
 	public void loadVideo(String filePath) {
 
-		System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+		Thread run = new Thread() {
+			@Override
+			public void run() {
+				System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
 
-		// check if file exists
-		if (!Paths.get(filePath).toFile().exists()) {
-			System.out.println(filePath + " does not exit!");
-			return;
-		}
+				// check if file exists
+				if (!Paths.get(filePath).toFile().exists()) {
+					System.out.println(filePath + " does not exit!");
+					return;
+				}
 
-		VideoCapture videoCapture = new VideoCapture(filePath);
-		if (!videoCapture.isOpened()) {
-			System.out.println("Error! file can't be opened!");
-			return;
-		}
+				VideoCapture videoCapture = new VideoCapture(filePath);
+				if (!videoCapture.isOpened()) {
+					System.out.println("Error! file can't be opened!");
+					return;
+				}
 
-		frameCount = (int) videoCapture.get(Videoio.CAP_PROP_FRAME_COUNT);
-		fps = videoCapture.get(Videoio.CAP_PROP_FPS);
-		width = (int) videoCapture.get(Videoio.CAP_PROP_FRAME_WIDTH);
-		height = (int) videoCapture.get(Videoio.CAP_PROP_FRAME_HEIGHT);
-		currentFrame = 0;
+				frameCount = (int) videoCapture.get(Videoio.CAP_PROP_FRAME_COUNT);
+				fps = videoCapture.get(Videoio.CAP_PROP_FPS);
+				width = (int) videoCapture.get(Videoio.CAP_PROP_FRAME_WIDTH);
+				height = (int) videoCapture.get(Videoio.CAP_PROP_FRAME_HEIGHT);
+				currentFrame = 0;
 
-		// make output folder if does not exist
-		File dir = new File(tempPath);
-		if (!dir.exists()) {
-			dir.mkdir();
-		}
+				// make output folder if does not exist
+				File dir = new File(tempPath);
+				if (!dir.exists()) {
+					dir.mkdir();
+				}
 
-		// read in all frames
-		Mat frame = new Mat();
-		while (videoCapture.read(frame)) {
-			
-			Imgcodecs.imwrite(tempPath + "\\in-" + currentFrame + ".png", frame);
-			
-			System.out.println("Reading frame " + currentFrame + " of " + (frameCount-1));
-			currentFrame++;
-		}
-		videoCapture.release();
-		System.out.println("Done!");
+				// read in all frames
+				Mat frame = new Mat();
+				slider.setEnabled(false);
+				while (videoCapture.read(frame)) {
 
-		processVideo();
+					Imgcodecs.imwrite(tempPath + "\\in-" + currentFrame + ".png", frame);
+					System.out.println("Reading frame " + currentFrame + " of " + (frameCount - 1));
+
+					slider.setMaximum(currentFrame);
+					slider.setValue(currentFrame);
+					currentFrame++;
+				}
+				slider.setEnabled(true);
+				videoCapture.release();
+				System.out.println("Done!");
+			}
+		};
+		run.start();
+
+		// processVideo();
 	}
 
 	public void processVideo() {
 		// process frames
 
 		ArrayList<BufferedImage> frames = new ArrayList<>();
-		
+
 		try {
 			frames.add(ImageIO.read(new File(tempPath + "\\in-0.png")));
-			
+
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -258,38 +299,43 @@ public class Video {
 		frame.setTitle("Image captured");
 		frame.setLayout(new BoxLayout(frame.getContentPane(), BoxLayout.Y_AXIS));
 
-		JButton choose = new JButton("Choose Video");
+		JButton choose = new JButton("Load Video");
 		JButton button = new JButton("Motion Detect!");
 		JCheckBox red = new JCheckBox("Red");
 		JCheckBox green = new JCheckBox("Green");
 		JCheckBox blue = new JCheckBox("Blue");
+		JCheckBox viewFiltered = new JCheckBox("View Filtered");
 		JLabel difference = new JLabel("Select a colour to use the difference colour method.");
 
-		button.setPreferredSize(new Dimension(150, 50));
-		choose.setPreferredSize(new Dimension(150, 50));
-		red.setPreferredSize(new Dimension(50, 50));
-		green.setPreferredSize(new Dimension(70, 50));
-		blue.setPreferredSize(new Dimension(50, 50));
-		difference.setPreferredSize(new Dimension(300, 50));
-
 		JPanel panel = new JPanel();
+		panel.add(choose);
+		panel.add(viewFiltered);
+
 		visibleFrame = new JPanel() {
+			private static final long serialVersionUID = 1L;
+
 			@Override
 			protected void paintComponent(Graphics g) {
 				super.paintComponent(g);
-				g.drawImage(showFrame, 0, 0, this); // see javadoc for more info on the parameters
+				int newWidth = 0;
+				int newHeight = 0;
+				if (((double) width) / height > ((double) getSize().width) / getSize().height) {
+					newWidth = getSize().width;
+					double scale = ((double) width) / newWidth;
+					newHeight = (int) (height / scale);
+				} else {
+					newHeight = getSize().height;
+					double scale = ((double) height) / newHeight;
+					newWidth = (int) (width / scale);
+				}
+
+				g.drawImage(showFrame, 0, 0, newWidth, newHeight, this); // see javadoc for more info on the parameters
 			}
 		};
 
-		panel.add(choose);
-		// panel.add(difference);
-		// panel.add(red);
-		// panel.add(green);
-		// panel.add(blue);
-		// panel.add(button);
-
 		frame.add(panel);
 		frame.add(visibleFrame);
+		frame.add(slider);
 
 		choose.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
@@ -317,27 +363,25 @@ public class Video {
 			}
 		});
 
-		removeRed = false;
-		removeGreen = false;
-		removeBlue = false;
-
+		viewFiltered.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				showFiltered = viewFiltered.isSelected();
+			}
+		});
 		red.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				removeRed = true;
-
+				removeRed = red.isSelected();
 			}
 		});
 		green.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				removeGreen = true;
-
+				removeGreen = green.isSelected();
 			}
 		});
 
 		blue.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				removeBlue = true;
-
+				removeBlue = blue.isSelected();
 			}
 		});
 
