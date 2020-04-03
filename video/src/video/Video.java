@@ -82,13 +82,14 @@ public class Video {
 	public JSlider initSlider() {
 		JSlider slider = new JSlider();
 		slider.addChangeListener(new ChangeListener() {
-
 			@Override
 			public void stateChanged(ChangeEvent e) {
 				showFrame(slider.getValue());
 			}
 		});
 		slider.setMinimum(0);
+		slider.setMaximum(1);
+		slider.setEnabled(false);
 		slider.setMinorTickSpacing(1);
 		slider.setMajorTickSpacing(10);
 		slider.setPaintTicks(true);
@@ -101,8 +102,14 @@ public class Video {
 			@Override
 			public void run() {
 				try {
-					showFrame = ImageIO.read(new File(tempPath + "\\in-" + index + ".png"));
-					visibleFrame.repaint();
+					if (showFiltered) {
+						showFrame = processFrame(index);
+					} else {
+						showFrame = ImageIO.read(new File(tempPath + "\\in-" + index + ".png"));
+					}
+					if (visibleFrame != null) {
+						visibleFrame.repaint();
+					}
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
@@ -196,6 +203,18 @@ public class Video {
 		System.out.println("Done!");
 
 		saveVideo();
+	}
+
+	public BufferedImage processFrame(int index) {
+		BufferedImage result = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
+		try {
+			BufferedImage frame1 = ImageIO.read(new File(tempPath + "\\in-" + (index) + ".png"));
+			BufferedImage frame2 = ImageIO.read(new File(tempPath + "\\in-" + (index + 1) + ".png"));
+			result = subtract(frame1, frame2);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return result;
 	}
 
 	public void saveVideo() {
@@ -345,6 +364,12 @@ public class Video {
 		viewFiltered.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				showFiltered = viewFiltered.isSelected();
+				showFrame(slider.getValue());
+				if (showFiltered) {
+					slider.setMaximum(frameCount - 2);
+				} else {
+					slider.setMaximum(frameCount - 1);
+				}
 			}
 		});
 		red.addActionListener(new ActionListener() {
@@ -369,8 +394,12 @@ public class Video {
 	}
 
 	void draw(Graphics g, JPanel panel) {
+
+		g.fillRect(0, 0, panel.getSize().width, panel.getSize().height);
+
 		int newWidth = 0;
 		int newHeight = 0;
+
 		if (((double) width) / height > ((double) panel.getSize().width) / panel.getSize().height) {
 			newWidth = panel.getSize().width;
 			double scale = ((double) width) / newWidth;
@@ -380,8 +409,8 @@ public class Video {
 			double scale = ((double) height) / newHeight;
 			newWidth = (int) (width / scale);
 		}
-		int cx = panel.getSize().width/2-newWidth/2;
-		int cy = panel.getSize().height/2-newHeight/2;
+		int cx = panel.getSize().width / 2 - newWidth / 2;
+		int cy = panel.getSize().height / 2 - newHeight / 2;
 		g.drawImage(showFrame, cx, cy, newWidth, newHeight, panel); // see javadoc for more info on the parameters
 	}
 
