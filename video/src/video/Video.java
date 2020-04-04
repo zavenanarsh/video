@@ -69,6 +69,10 @@ public class Video {
 	JSlider sampleSlider;
 	int sample;
 
+	JButton fullResCache;
+	
+	Thread showFrameThread;
+
 	public static void main(String[] args) {
 		new Video();
 	}
@@ -87,7 +91,7 @@ public class Video {
 
 	public JSlider initSampleSlider() {
 		JSlider newSlider = new JSlider(1, 50);
-		
+
 		newSlider.setValue(4);
 		sample = 4;
 
@@ -141,15 +145,26 @@ public class Video {
 	}
 
 	public void showFrame(int index) {
-		Thread thread = new Thread() {
+		if (showFrameThread != null && showFrameThread.isAlive()) {
+			showFrameThread.interrupt();
+		}
+		showFrameThread = new Thread() {
 			@Override
 			public void run() {
 				try {
+					if (Thread.interrupted())
+						return;
 					if (showFiltered) {
-						showFrame = processFrame(index);
+						BufferedImage newFrame = processFrame(index);
+						if (newFrame != null) {
+							showFrame = newFrame;
+						}
+
 					} else {
 						showFrame = ImageIO.read(new File(tempPath + "\\in-" + index + ".png"));
 					}
+					if (Thread.interrupted())
+						return;
 					if (visibleFrame != null) {
 						visibleFrame.repaint();
 					}
@@ -158,7 +173,7 @@ public class Video {
 				}
 			}
 		};
-		thread.start();
+		showFrameThread.start();
 	}
 
 	public void loadVideo(String filePath) {
@@ -249,10 +264,16 @@ public class Video {
 	}
 
 	public BufferedImage processFrame(int index) {
-		BufferedImage result = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
+		BufferedImage result = null;
 		try {
+			if (Thread.interrupted())
+				return result;
 			BufferedImage frame1 = ImageIO.read(new File(tempPath + "\\in-" + (index) + ".png"));
+			if (Thread.interrupted())
+				return result;
 			BufferedImage frame2 = ImageIO.read(new File(tempPath + "\\in-" + (index + 1) + ".png"));
+			if (Thread.interrupted())
+				return result;
 			result = process(frame1, frame2, sample, gamma);
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -287,12 +308,14 @@ public class Video {
 
 		for (int y = 0; y < height / sample; y++) {
 			for (int x = 0; x < width / sample; x++) {
+				if (Thread.interrupted())
+					return out;
 				Color pixel1 = new Color(src1.getRGB(x * sample, y * sample));
 				Color pixel2 = new Color(src2.getRGB(x * sample, y * sample));
 
-				int r = pixel1.getRed() - pixel2.getRed();
-				int g = pixel1.getGreen() - pixel2.getGreen();
-				int b = pixel1.getBlue() - pixel2.getBlue();
+				int r = Math.abs(pixel1.getRed() - pixel2.getRed());
+				int g = Math.abs(pixel1.getGreen() - pixel2.getGreen());
+				int b = Math.abs(pixel1.getBlue() - pixel2.getBlue());
 
 				r = (int) (Math.pow(r / (double) 255, 1 / gamma) * 255);
 				g = (int) (Math.pow(g / (double) 255, 1 / gamma) * 255);
@@ -312,7 +335,11 @@ public class Video {
 		return in;
 	}
 
-	public void difference(int r, int g, int b) {
+	public Color difference(Color color) {
+		int r = color.getRed();
+		int g = color.getGreen();
+		int b = color.getBlue();
+
 		if (removeRed == true) {
 			if (r > g) {
 				r = g;
@@ -330,6 +357,7 @@ public class Video {
 				b = g;
 			}
 		}
+		return new Color(r,g,b);
 	}
 
 	public void UI() {
@@ -348,6 +376,8 @@ public class Video {
 		JCheckBox blue = new JCheckBox("Blue");
 		JCheckBox viewFiltered = new JCheckBox("View Filtered");
 
+		fullResCache = new JButton("Full Resolution Disk Cache");
+
 		JLabel gammaText = new JLabel("Gamma");
 		JLabel samplesText = new JLabel("Proxy");
 
@@ -357,15 +387,22 @@ public class Video {
 
 		JPanel panel1 = new JPanel();
 		panel1.setLayout(new BoxLayout(panel1, BoxLayout.Y_AXIS));
-		panel1.add(gammaText, BorderLayout.CENTER);
-		panel1.add(gammaSlider, BorderLayout.CENTER);
+		panel1.add(gammaText);
+		panel1.add(gammaSlider);
 		panel.add(panel1);
 
 		JPanel panel2 = new JPanel();
 		panel2.setLayout(new BoxLayout(panel2, BoxLayout.Y_AXIS));
-		panel2.add(samplesText, BorderLayout.CENTER);
-		panel2.add(sampleSlider, BorderLayout.CENTER);
+		panel2.add(samplesText);
+		panel2.add(sampleSlider);
 		panel.add(panel2);
+		
+		JPanel panel3 = new JPanel();
+		panel3.setLayout(new BoxLayout(panel3, BoxLayout.Y_AXIS));
+		panel3.add(red);
+		panel3.add(green);
+		panel3.add(blue);
+		panel.add(panel3);
 
 		visibleFrame = new JPanel() {
 			private static final long serialVersionUID = 1L;
@@ -394,6 +431,21 @@ public class Video {
 		gbc.weightx = 1;
 		gbc.fill = GridBagConstraints.HORIZONTAL;
 		frame.add(slider, gbc);
+		gbc.gridx = 0;
+		gbc.gridy = 3;
+		gbc.weighty = 0;
+		gbc.weightx = 1;
+		gbc.fill = GridBagConstraints.HORIZONTAL;
+		frame.add(fullResCache, gbc);
+
+		fullResCache.addActionListener(new ActionListener() {
+
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				processVideo();
+			}
+
+		});
 
 		choose.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
