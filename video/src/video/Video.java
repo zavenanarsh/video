@@ -74,7 +74,7 @@ public class Video {
 	JButton loadVideoButton = new JButton("Load Video");
 	JCheckBox red = new JCheckBox("Red");
 	JCheckBox green = new JCheckBox("Green");
-	JCheckBox useAsMaskCheck = new JCheckBox("Blue");
+	JCheckBox useAsMaskCheck = new JCheckBox("Use As Mask");
 	JCheckBox viewFiltered = new JCheckBox("View Filtered");
 	JButton fullResCache = new JButton("Full Resolution Disk Cache");;
 	JButton saveButton = new JButton("Save");
@@ -110,6 +110,7 @@ public class Video {
 	public void doneLoadingVideo() {
 		loadVideoButton.setEnabled(false);
 		loadVideoButton.setText("Fully Loaded");
+		setViewFiltered(true);
 
 		saveButton.setEnabled(false);
 		red.setEnabled(true);
@@ -253,7 +254,6 @@ public class Video {
 	public void loadVideo(String filePath) {
 		loadVideoButton.setEnabled(false);
 		loadVideoButton.setText("Loading...");
-		;
 
 		Thread thread = new Thread() {
 			@Override
@@ -468,8 +468,8 @@ public class Video {
 
 		JPanel panel3 = new JPanel();
 		panel3.setLayout(new BoxLayout(panel3, BoxLayout.Y_AXIS));
-		panel3.add(red);
-		panel3.add(green);
+		// panel3.add(red);
+		// panel3.add(green);
 		panel3.add(useAsMaskCheck);
 		panel.add(panel3);
 
@@ -555,16 +555,7 @@ public class Video {
 
 		viewFiltered.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				showFiltered = viewFiltered.isSelected();
-				if (showFiltered) {
-					if (slider.getValue() > frameCount - 2) {
-						slider.setValue(frameCount - 2);
-					}
-					slider.setMaximum(frameCount - 2);
-				} else {
-					slider.setMaximum(frameCount - 1);
-				}
-				showFrame(slider.getValue());
+				setViewFiltered(viewFiltered.isSelected());
 			}
 		});
 		red.addActionListener(new ActionListener() {
@@ -587,6 +578,20 @@ public class Video {
 
 		frame.setVisible(true);
 
+	}
+
+	void setViewFiltered(boolean value) {
+		showFiltered = value;
+		viewFiltered.setSelected(value);
+		if (showFiltered) {
+			if (slider.getValue() > frameCount - 2) {
+				slider.setValue(frameCount - 2);
+			}
+			slider.setMaximum(frameCount - 2);
+		} else {
+			slider.setMaximum(frameCount - 1);
+		}
+		showFrame(slider.getValue());
 	}
 
 	void draw(Graphics g, JPanel panel) {
