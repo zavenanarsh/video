@@ -50,9 +50,11 @@ import org.opencv.videoio.Videoio;
 
 public class Video {
 
-	boolean removeRed, removeGreen, removeBlue, showFiltered;
+	boolean removeRed, removeGreen, useAsMask, showFiltered;
 	int width, height, frameCount, currentFrame;
 	double fps;
+
+	boolean diskCacheVideo = false;
 
 	BufferedImage showFrame;
 
@@ -69,8 +71,14 @@ public class Video {
 	JSlider sampleSlider;
 	int sample;
 
-	JButton fullResCache;
-	
+	JButton loadVideoButton = new JButton("Load Video");
+	JCheckBox red = new JCheckBox("Red");
+	JCheckBox green = new JCheckBox("Green");
+	JCheckBox useAsMaskCheck = new JCheckBox("Blue");
+	JCheckBox viewFiltered = new JCheckBox("View Filtered");
+	JButton fullResCache = new JButton("Full Resolution Disk Cache");;
+	JButton saveButton = new JButton("Save");
+
 	Thread showFrameThread;
 
 	public static void main(String[] args) {
@@ -86,7 +94,71 @@ public class Video {
 		gammaSlider = initGammaSlider();
 		sampleSlider = initSampleSlider();
 
+		red.setEnabled(false);
+		green.setEnabled(false);
+		useAsMaskCheck.setEnabled(false);
+		viewFiltered.setEnabled(false);
+		slider.setEnabled(false);
+		gammaSlider.setEnabled(false);
+		sampleSlider.setEnabled(false);
+		fullResCache.setEnabled(false);
+		saveButton.setEnabled(false);
+
 		UI();
+	}
+
+	public void doneLoadingVideo() {
+		loadVideoButton.setEnabled(false);
+		loadVideoButton.setText("Fully Loaded");
+
+		saveButton.setEnabled(false);
+		red.setEnabled(true);
+		green.setEnabled(true);
+		useAsMaskCheck.setEnabled(true);
+		viewFiltered.setEnabled(true);
+		slider.setEnabled(true);
+		gammaSlider.setEnabled(true);
+		sampleSlider.setEnabled(true);
+		fullResCache.setEnabled(true);
+	}
+
+	public void diskCaching() {
+		saveButton.setEnabled(false);
+		red.setEnabled(false);
+		green.setEnabled(false);
+		useAsMaskCheck.setEnabled(false);
+		viewFiltered.setEnabled(false);
+		slider.setEnabled(false);
+		gammaSlider.setEnabled(false);
+		sampleSlider.setEnabled(false);
+		fullResCache.setEnabled(false);
+		fullResCache.setText("Processing...");
+	}
+
+	public void doneDiskCaching() {
+		saveButton.setEnabled(true);
+		red.setEnabled(false);
+		green.setEnabled(false);
+		useAsMaskCheck.setEnabled(false);
+		viewFiltered.setEnabled(false);
+		slider.setEnabled(true);
+		gammaSlider.setEnabled(false);
+		sampleSlider.setEnabled(false);
+		fullResCache.setEnabled(false);
+		fullResCache.setText("Done Full Res Disk Cache");
+	}
+
+	public void saving() {
+		saveButton.setEnabled(false);
+		saveButton.setText("Saving...");
+		red.setEnabled(false);
+		green.setEnabled(false);
+		useAsMaskCheck.setEnabled(false);
+		viewFiltered.setEnabled(false);
+		slider.setEnabled(false);
+		gammaSlider.setEnabled(false);
+		sampleSlider.setEnabled(false);
+		fullResCache.setEnabled(false);
 	}
 
 	public JSlider initSampleSlider() {
@@ -136,7 +208,6 @@ public class Video {
 		});
 		newSlider.setMinimum(0);
 		newSlider.setMaximum(1);
-		newSlider.setEnabled(false);
 		newSlider.setMinorTickSpacing(1);
 		newSlider.setMajorTickSpacing(10);
 		newSlider.setPaintTicks(true);
@@ -154,7 +225,10 @@ public class Video {
 				try {
 					if (Thread.interrupted())
 						return;
-					if (showFiltered) {
+
+					if (diskCacheVideo) {
+						showFrame = ImageIO.read(new File(tempPath + "\\out-" + index + ".png"));
+					} else if (showFiltered) {
 						BufferedImage newFrame = processFrame(index);
 						if (newFrame != null) {
 							showFrame = newFrame;
@@ -177,6 +251,9 @@ public class Video {
 	}
 
 	public void loadVideo(String filePath) {
+		loadVideoButton.setEnabled(false);
+		loadVideoButton.setText("Loading...");
+		;
 
 		Thread thread = new Thread() {
 			@Override
@@ -208,19 +285,19 @@ public class Video {
 					dir.mkdir();
 				}
 
+				slider.setMaximum(frameCount - 1);
+
 				// read in all frames
 				Mat frame = new Mat();
-				slider.setEnabled(false);
 				while (videoCapture.read(frame)) {
 
 					Imgcodecs.imwrite(tempPath + "\\in-" + currentFrame + ".png", frame);
 					System.out.println("Reading frame " + currentFrame + " of " + (frameCount - 1));
 
-					slider.setMaximum(currentFrame);
 					slider.setValue(currentFrame);
 					currentFrame++;
 				}
-				slider.setEnabled(true);
+				doneLoadingVideo();
 				videoCapture.release();
 				System.out.println("Done!");
 			}
@@ -234,33 +311,45 @@ public class Video {
 		// process frames
 
 		ArrayList<BufferedImage> frames = new ArrayList<>();
+		diskCacheVideo = true;
+		diskCaching();
+		slider.setMaximum(frameCount - 2);
 
-		try {
-			frames.add(ImageIO.read(new File(tempPath + "\\in-0.png")));
+		Thread thread = new Thread() {
 
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-		System.out.println("Starting to process frames --------------------------");
-		for (int i = 0; i < frameCount - 1; i++) {
-			try {
-				frames.add(ImageIO.read(new File(tempPath + "\\in-" + (i + 1) + ".png")));
+			@Override
+			public void run() {
+				try {
+					frames.add(ImageIO.read(new File(tempPath + "\\in-0.png")));
 
-				while (frames.size() > 2) {
-					frames.remove(0);
+				} catch (Exception e) {
+					e.printStackTrace();
 				}
+				System.out.println("Starting to process frames --------------------------");
+				for (int i = 0; i < frameCount - 1; i++) {
+					try {
 
-				File outputFile = new File(tempPath + "\\out-" + i + ".png");
-				ImageIO.write(process(frames.get(0), frames.get(1), 1, gamma), "png", outputFile);
-			} catch (IOException e) {
-				e.printStackTrace();
+						frames.add(ImageIO.read(new File(tempPath + "\\in-" + (i + 1) + ".png")));
+
+						while (frames.size() > 2) {
+							frames.remove(0);
+						}
+
+						File outputFile = new File(tempPath + "\\out-" + i + ".png");
+						ImageIO.write(process(frames.get(0), frames.get(1), 1, gamma), "png", outputFile);
+
+						slider.setValue(i);
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+
+					System.out.println("Processing frame " + (i + 1) + " of " + (frameCount - 1));
+				}
+				System.out.println("Done!");
+				doneDiskCaching();
 			}
-
-			System.out.println("Processing frame " + (i + 1) + " of " + (frameCount - 1));
-		}
-		System.out.println("Done!");
-
-		saveVideo();
+		};
+		thread.start();
 	}
 
 	public BufferedImage processFrame(int index) {
@@ -281,23 +370,31 @@ public class Video {
 		return result;
 	}
 
-	public void saveVideo() {
+	public void saveVideo(String path) {
 		// save video
-		System.out.println("Saving video --------------------------");
-		VideoWriter videoWriter = new VideoWriter("output.avi", VideoWriter.fourcc('x', '2', '6', '4'), fps,
-				new Size(width, height));
+		saving();
+		Thread thread = new Thread() {
+			@Override
+			public void run() {
+				System.out.println("Saving video --------------------------");
+				VideoWriter videoWriter = new VideoWriter(path + "\\output.avi", VideoWriter.fourcc('x', '2', '6', '4'),
+						fps, new Size(width, height));
 
-		for (int i = 0; i < frameCount - 1; i++) {
-			try {
-				Mat mat = Imgcodecs.imread(tempPath + "\\out-" + i + ".png");
-				videoWriter.write(mat);
+				for (int i = 0; i < frameCount - 1; i++) {
+					try {
+						Mat mat = Imgcodecs.imread(tempPath + "\\out-" + i + ".png");
+						videoWriter.write(mat);
 
-			} catch (Exception e) {
-				e.printStackTrace();
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
+				}
+				videoWriter.release();
+				System.out.println("Done!");
+				saveButton.setText("File at: " + path + "\\output.avi");
 			}
-		}
-		videoWriter.release();
-		System.out.println("Done!");
+		};
+		thread.start();
 	}
 
 	public BufferedImage process(BufferedImage src1, BufferedImage src2, int sample, double gamma) {
@@ -317,9 +414,15 @@ public class Video {
 				int g = Math.abs(pixel1.getGreen() - pixel2.getGreen());
 				int b = Math.abs(pixel1.getBlue() - pixel2.getBlue());
 
-				r = (int) (Math.pow(r / (double) 255, 1 / gamma) * 255);
-				g = (int) (Math.pow(g / (double) 255, 1 / gamma) * 255);
-				b = (int) (Math.pow(b / (double) 255, 1 / gamma) * 255);
+				r = (int) (Math.pow(r / 255.0, 1 / gamma) * 255);
+				g = (int) (Math.pow(g / 255.0, 1 / gamma) * 255);
+				b = (int) (Math.pow(b / 255.0, 1 / gamma) * 255);
+
+				if (useAsMask) {
+					r = (int) ((r / 255.0) * pixel1.getRed());
+					g = (int) ((g / 255.0) * pixel1.getGreen());
+					b = (int) ((b / 255.0) * pixel1.getBlue());
+				}
 
 				Color pixelOut = new Color(clamp(r), clamp(g), clamp(b));
 
@@ -335,31 +438,6 @@ public class Video {
 		return in;
 	}
 
-	public Color difference(Color color) {
-		int r = color.getRed();
-		int g = color.getGreen();
-		int b = color.getBlue();
-
-		if (removeRed == true) {
-			if (r > g) {
-				r = g;
-			}
-		}
-
-		if (removeGreen == true) {
-			if (g > r) {
-				g = r;
-			}
-		}
-
-		if (removeBlue == true) {
-			if (b > g) {
-				b = g;
-			}
-		}
-		return new Color(r,g,b);
-	}
-
 	public void UI() {
 
 		JFrame frame = new JFrame();
@@ -369,20 +447,11 @@ public class Video {
 		frame.setTitle("Image captured");
 		frame.setLayout(new GridBagLayout());
 
-		JButton choose = new JButton("Load Video");
-		JButton button = new JButton("Motion Detect!");
-		JCheckBox red = new JCheckBox("Red");
-		JCheckBox green = new JCheckBox("Green");
-		JCheckBox blue = new JCheckBox("Blue");
-		JCheckBox viewFiltered = new JCheckBox("View Filtered");
-
-		fullResCache = new JButton("Full Resolution Disk Cache");
-
 		JLabel gammaText = new JLabel("Gamma");
 		JLabel samplesText = new JLabel("Proxy");
 
 		JPanel panel = new JPanel();
-		panel.add(choose);
+		panel.add(loadVideoButton);
 		panel.add(viewFiltered);
 
 		JPanel panel1 = new JPanel();
@@ -396,12 +465,12 @@ public class Video {
 		panel2.add(samplesText);
 		panel2.add(sampleSlider);
 		panel.add(panel2);
-		
+
 		JPanel panel3 = new JPanel();
 		panel3.setLayout(new BoxLayout(panel3, BoxLayout.Y_AXIS));
 		panel3.add(red);
 		panel3.add(green);
-		panel3.add(blue);
+		panel3.add(useAsMaskCheck);
 		panel.add(panel3);
 
 		visibleFrame = new JPanel() {
@@ -437,6 +506,12 @@ public class Video {
 		gbc.weightx = 1;
 		gbc.fill = GridBagConstraints.HORIZONTAL;
 		frame.add(fullResCache, gbc);
+		gbc.gridx = 0;
+		gbc.gridy = 4;
+		gbc.weighty = 0;
+		gbc.weightx = 1;
+		gbc.fill = GridBagConstraints.HORIZONTAL;
+		frame.add(saveButton, gbc);
 
 		fullResCache.addActionListener(new ActionListener() {
 
@@ -447,7 +522,7 @@ public class Video {
 
 		});
 
-		choose.addActionListener(new ActionListener() {
+		loadVideoButton.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				// FileChooser
 
@@ -462,14 +537,19 @@ public class Video {
 				}
 			}
 		});
-		button.addActionListener(new ActionListener() {
+		saveButton.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				// display/center the jdialog when the button is pressed
-				JDialog d = new JDialog(frame, "Starting...", true);
-				d.setLocationRelativeTo(frame);
-				d.setVisible(true);
-				// close JFrame
-				frame.dispose();
+				JFileChooser jfc = new JFileChooser(FileSystemView.getFileSystemView().getHomeDirectory());
+				jfc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+
+				int returnValue = jfc.showOpenDialog(null);
+				// int returnValue = jfc.showSaveDialog(null);
+
+				if (returnValue == JFileChooser.APPROVE_OPTION) {
+					File selectedFile = jfc.getSelectedFile();
+					loadVideoButton.setEnabled(false);
+					saveVideo(selectedFile.getAbsolutePath());
+				}
 			}
 		});
 
@@ -498,9 +578,10 @@ public class Video {
 			}
 		});
 
-		blue.addActionListener(new ActionListener() {
+		useAsMaskCheck.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				removeBlue = blue.isSelected();
+				useAsMask = useAsMaskCheck.isSelected();
+				showFrame(slider.getValue());
 			}
 		});
 
