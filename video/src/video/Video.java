@@ -64,6 +64,10 @@ public class Video {
 	JPanel visibleFrame;
 
 	JSlider slider;
+	JSlider gammaSlider;
+	double gamma;
+	JSlider sampleSlider;
+	int sample;
 
 	public static void main(String[] args) {
 		new Video();
@@ -75,26 +79,65 @@ public class Video {
 		tempPath = basePath + "\\temp";
 
 		slider = initSlider();
+		gammaSlider = initGammaSlider();
+		sampleSlider = initSampleSlider();
 
 		UI();
 	}
 
-	public JSlider initSlider() {
-		JSlider slider = new JSlider();
-		slider.addChangeListener(new ChangeListener() {
+	public JSlider initSampleSlider() {
+		JSlider newSlider = new JSlider(1, 50);
+		
+		newSlider.setValue(4);
+		sample = 4;
+
+		newSlider.addChangeListener(new ChangeListener() {
 			@Override
 			public void stateChanged(ChangeEvent e) {
-				showFrame(slider.getValue());
+				sample = newSlider.getValue();
+				if (showFiltered) {
+					showFrame(slider.getValue());
+				}
 			}
 		});
-		slider.setMinimum(0);
-		slider.setMaximum(1);
-		slider.setEnabled(false);
-		slider.setMinorTickSpacing(1);
-		slider.setMajorTickSpacing(10);
-		slider.setPaintTicks(true);
-		slider.setPaintLabels(true);
-		return slider;
+		return newSlider;
+	}
+
+	public JSlider initGammaSlider() {
+		JSlider newSlider = new JSlider(0, 1000);
+
+		newSlider.setValue(100);
+		gamma = 1;
+
+		newSlider.addChangeListener(new ChangeListener() {
+			@Override
+			public void stateChanged(ChangeEvent e) {
+				gamma = newSlider.getValue() * .01;
+				if (showFiltered) {
+					showFrame(slider.getValue());
+				}
+			}
+		});
+
+		return newSlider;
+	}
+
+	public JSlider initSlider() {
+		JSlider newSlider = new JSlider();
+		newSlider.addChangeListener(new ChangeListener() {
+			@Override
+			public void stateChanged(ChangeEvent e) {
+				showFrame(newSlider.getValue());
+			}
+		});
+		newSlider.setMinimum(0);
+		newSlider.setMaximum(1);
+		newSlider.setEnabled(false);
+		newSlider.setMinorTickSpacing(1);
+		newSlider.setMajorTickSpacing(10);
+		newSlider.setPaintTicks(true);
+		newSlider.setPaintLabels(true);
+		return newSlider;
 	}
 
 	public void showFrame(int index) {
@@ -193,7 +236,7 @@ public class Video {
 				}
 
 				File outputFile = new File(tempPath + "\\out-" + i + ".png");
-				ImageIO.write(subtract(frames.get(0), frames.get(1)), "png", outputFile);
+				ImageIO.write(process(frames.get(0), frames.get(1), 1, gamma), "png", outputFile);
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
@@ -210,7 +253,7 @@ public class Video {
 		try {
 			BufferedImage frame1 = ImageIO.read(new File(tempPath + "\\in-" + (index) + ".png"));
 			BufferedImage frame2 = ImageIO.read(new File(tempPath + "\\in-" + (index + 1) + ".png"));
-			result = subtract(frame1, frame2);
+			result = process(frame1, frame2, sample, gamma);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -236,20 +279,24 @@ public class Video {
 		System.out.println("Done!");
 	}
 
-	public BufferedImage subtract(BufferedImage src1, BufferedImage src2) {
+	public BufferedImage process(BufferedImage src1, BufferedImage src2, int sample, double gamma) {
 		int width = src1.getWidth();
 		int height = src1.getHeight();
 
-		BufferedImage out = new BufferedImage(width, height, src1.getType());
+		BufferedImage out = new BufferedImage(width / sample, height / sample, src1.getType());
 
-		for (int y = 0; y < height; y++) {
-			for (int x = 0; x < width; x++) {
-				Color pixel1 = new Color(src1.getRGB(x, y));
-				Color pixel2 = new Color(src2.getRGB(x, y));
+		for (int y = 0; y < height / sample; y++) {
+			for (int x = 0; x < width / sample; x++) {
+				Color pixel1 = new Color(src1.getRGB(x * sample, y * sample));
+				Color pixel2 = new Color(src2.getRGB(x * sample, y * sample));
 
 				int r = pixel1.getRed() - pixel2.getRed();
 				int g = pixel1.getGreen() - pixel2.getGreen();
 				int b = pixel1.getBlue() - pixel2.getBlue();
+
+				r = (int) (Math.pow(r / (double) 255, 1 / gamma) * 255);
+				g = (int) (Math.pow(g / (double) 255, 1 / gamma) * 255);
+				b = (int) (Math.pow(b / (double) 255, 1 / gamma) * 255);
 
 				Color pixelOut = new Color(clamp(r), clamp(g), clamp(b));
 
@@ -300,12 +347,25 @@ public class Video {
 		JCheckBox green = new JCheckBox("Green");
 		JCheckBox blue = new JCheckBox("Blue");
 		JCheckBox viewFiltered = new JCheckBox("View Filtered");
-		// JLabel difference = new JLabel("Select a colour to use the difference colour
-		// method.");
+
+		JLabel gammaText = new JLabel("Gamma");
+		JLabel samplesText = new JLabel("Proxy");
 
 		JPanel panel = new JPanel();
 		panel.add(choose);
 		panel.add(viewFiltered);
+
+		JPanel panel1 = new JPanel();
+		panel1.setLayout(new BoxLayout(panel1, BoxLayout.Y_AXIS));
+		panel1.add(gammaText, BorderLayout.CENTER);
+		panel1.add(gammaSlider, BorderLayout.CENTER);
+		panel.add(panel1);
+
+		JPanel panel2 = new JPanel();
+		panel2.setLayout(new BoxLayout(panel2, BoxLayout.Y_AXIS));
+		panel2.add(samplesText, BorderLayout.CENTER);
+		panel2.add(sampleSlider, BorderLayout.CENTER);
+		panel.add(panel2);
 
 		visibleFrame = new JPanel() {
 			private static final long serialVersionUID = 1L;
@@ -364,12 +424,15 @@ public class Video {
 		viewFiltered.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				showFiltered = viewFiltered.isSelected();
-				showFrame(slider.getValue());
 				if (showFiltered) {
+					if (slider.getValue() > frameCount - 2) {
+						slider.setValue(frameCount - 2);
+					}
 					slider.setMaximum(frameCount - 2);
 				} else {
 					slider.setMaximum(frameCount - 1);
 				}
+				showFrame(slider.getValue());
 			}
 		});
 		red.addActionListener(new ActionListener() {
