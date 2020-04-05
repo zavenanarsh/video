@@ -71,6 +71,11 @@ public class Video {
 	JSlider sampleSlider;
 	int sample;
 
+	JSlider multiFrameSlider;
+	int stackFrames;
+	JSlider diffFrameSlider;
+	int diffFrames;
+
 	JButton loadVideoButton = new JButton("Load Video");
 	JCheckBox red = new JCheckBox("Red");
 	JCheckBox green = new JCheckBox("Green");
@@ -93,6 +98,8 @@ public class Video {
 		slider = initSlider();
 		gammaSlider = initGammaSlider();
 		sampleSlider = initSampleSlider();
+		multiFrameSlider = initMultiFrameSlider();
+		diffFrameSlider = initDiffFrameSlider();
 
 		red.setEnabled(false);
 		green.setEnabled(false);
@@ -160,6 +167,55 @@ public class Video {
 		gammaSlider.setEnabled(false);
 		sampleSlider.setEnabled(false);
 		fullResCache.setEnabled(false);
+	}
+
+	public int numberOfUsableFrames() {
+		return frameCount - stackFrames;
+	}
+
+	public JSlider initMultiFrameSlider() {
+		JSlider newSlider = new JSlider(2, 20);
+
+		newSlider.setValue(2);
+		stackFrames = 2;
+
+		newSlider.addChangeListener(new ChangeListener() {
+			@Override
+			public void stateChanged(ChangeEvent e) {
+				stackFrames = newSlider.getValue();
+				diffFrameSlider.setMaximum(stackFrames-1);
+				if (diffFrameSlider.getValue() > diffFrameSlider.getMaximum()) {
+					diffFrameSlider.setValue(diffFrameSlider.getMaximum());
+				} 
+				if (showFiltered) {
+					int usableFrames = numberOfUsableFrames();
+					slider.setMaximum(usableFrames);
+					if (slider.getValue() > usableFrames) {
+						slider.setValue(usableFrames);
+					}
+					showFrame(slider.getValue());
+				}
+			}
+		});
+		return newSlider;
+	}
+
+	public JSlider initDiffFrameSlider() {
+		JSlider newSlider = new JSlider(1, stackFrames-1);
+
+		newSlider.setValue(1);
+		diffFrames = 1;
+
+		newSlider.addChangeListener(new ChangeListener() {
+			@Override
+			public void stateChanged(ChangeEvent e) {
+				diffFrames = newSlider.getValue();
+				if (showFiltered) {
+					showFrame(slider.getValue());
+				}
+			}
+		});
+		return newSlider;
 	}
 
 	public JSlider initSampleSlider() {
@@ -313,7 +369,7 @@ public class Video {
 		ArrayList<BufferedImage> frames = new ArrayList<>();
 		diskCacheVideo = true;
 		diskCaching();
-		slider.setMaximum(frameCount - 2);
+		slider.setMaximum(numberOfUsableFrames());
 
 		Thread thread = new Thread() {
 
@@ -336,7 +392,7 @@ public class Video {
 						}
 
 						File outputFile = new File(tempPath + "\\out-" + i + ".png");
-						ImageIO.write(process(frames.get(0), frames.get(1), 1, gamma), "png", outputFile);
+						ImageIO.write(process(frames, 1, gamma), "png", outputFile);
 
 						slider.setValue(i);
 					} catch (IOException e) {
@@ -357,13 +413,15 @@ public class Video {
 		try {
 			if (Thread.interrupted())
 				return result;
-			BufferedImage frame1 = ImageIO.read(new File(tempPath + "\\in-" + (index) + ".png"));
-			if (Thread.interrupted())
-				return result;
-			BufferedImage frame2 = ImageIO.read(new File(tempPath + "\\in-" + (index + 1) + ".png"));
-			if (Thread.interrupted())
-				return result;
-			result = process(frame1, frame2, sample, gamma);
+			ArrayList<BufferedImage> src = new ArrayList<>();
+			for (int i = 0; i < stackFrames; i++) {
+				BufferedImage frame = ImageIO.read(new File(tempPath + "\\in-" + (index + i) + ".png"));
+				src.add(frame);
+				if (Thread.interrupted())
+					return result;
+			}
+			result = process(src, sample, gamma);
+
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -397,31 +455,52 @@ public class Video {
 		thread.start();
 	}
 
-	public BufferedImage process(BufferedImage src1, BufferedImage src2, int sample, double gamma) {
-		int width = src1.getWidth();
-		int height = src1.getHeight();
+	public BufferedImage process(ArrayList<BufferedImage> src, int sample, double gamma) {
+		int width = src.get(0).getWidth();
+		int height = src.get(0).getHeight();
 
-		BufferedImage out = new BufferedImage(width / sample, height / sample, src1.getType());
+		BufferedImage out = new BufferedImage(width / sample, height / sample, src.get(0).getType());
 
 		for (int y = 0; y < height / sample; y++) {
 			for (int x = 0; x < width / sample; x++) {
 				if (Thread.interrupted())
 					return out;
-				Color pixel1 = new Color(src1.getRGB(x * sample, y * sample));
-				Color pixel2 = new Color(src2.getRGB(x * sample, y * sample));
 
-				int r = Math.abs(pixel1.getRed() - pixel2.getRed());
-				int g = Math.abs(pixel1.getGreen() - pixel2.getGreen());
-				int b = Math.abs(pixel1.getBlue() - pixel2.getBlue());
+				// temporal averaging
+				int r1, g1, b1, r2, g2, b2;
+				r1 = g1 = b1 = r2 = g2 = b2 = 0;
+				for (int i = 0; i < src.size() - diffFrames; i++) {
+					Color pixel = new Color(src.get(i).getRGB(x * sample, y * sample));
+					r1 += pixel.getRed();
+					g1 += pixel.getGreen();
+					b1 += pixel.getBlue();
+				}
+				for (int i = diffFrames; i < src.size(); i++) {
+					Color pixel = new Color(src.get(i).getRGB(x * sample, y * sample));
+					r2 += pixel.getRed();
+					g2 += pixel.getGreen();
+					b2 += pixel.getBlue();
+				}
+				r1 /= src.size() - diffFrames;
+				g1 /= src.size() - diffFrames;
+				b1 /= src.size() - diffFrames;
+				r2 /= src.size() - diffFrames;
+				g2 /= src.size() - diffFrames;
+				b2 /= src.size() - diffFrames;
+
+				int r = Math.abs(r1 - r2);
+				int g = Math.abs(g1 - g2);
+				int b = Math.abs(b1 - b2);
 
 				r = (int) (Math.pow(r / 255.0, 1 / gamma) * 255);
 				g = (int) (Math.pow(g / 255.0, 1 / gamma) * 255);
 				b = (int) (Math.pow(b / 255.0, 1 / gamma) * 255);
 
 				if (useAsMask) {
-					r = (int) ((r / 255.0) * pixel1.getRed());
-					g = (int) ((g / 255.0) * pixel1.getGreen());
-					b = (int) ((b / 255.0) * pixel1.getBlue());
+					Color pixel = new Color(src.get(0).getRGB(x * sample, y * sample));
+					r = (int) ((r / 255.0) * pixel.getRed());
+					g = (int) ((g / 255.0) * pixel.getGreen());
+					b = (int) ((b / 255.0) * pixel.getBlue());
 				}
 
 				Color pixelOut = new Color(clamp(r), clamp(g), clamp(b));
@@ -450,28 +529,40 @@ public class Video {
 		JLabel gammaText = new JLabel("Gamma");
 		JLabel samplesText = new JLabel("Proxy");
 
+		JLabel multiFrameText = new JLabel("Frames");
+		JLabel deltaText = new JLabel("Delta");
+
 		JPanel panel = new JPanel();
 		panel.add(loadVideoButton);
 		panel.add(viewFiltered);
 
-		JPanel panel1 = new JPanel();
-		panel1.setLayout(new BoxLayout(panel1, BoxLayout.Y_AXIS));
-		panel1.add(gammaText);
-		panel1.add(gammaSlider);
-		panel.add(panel1);
-
+		JPanel panel1;
 		JPanel panel2 = new JPanel();
 		panel2.setLayout(new BoxLayout(panel2, BoxLayout.Y_AXIS));
-		panel2.add(samplesText);
-		panel2.add(sampleSlider);
+
+		panel1 = new JPanel();
+		panel1.add(gammaText);
+		panel1.add(gammaSlider);
+		panel2.add(panel1);
+
+		panel1 = new JPanel();
+		panel1.add(samplesText);
+		panel1.add(sampleSlider);
+		panel2.add(panel1);
+
+		panel1 = new JPanel();
+		panel1.add(multiFrameText);
+		panel1.add(multiFrameSlider);
+		panel2.add(panel1);
+		
+		panel1 = new JPanel();
+		panel1.add(deltaText);
+		panel1.add(diffFrameSlider);
+		panel2.add(panel1);
+
 		panel.add(panel2);
 
-		JPanel panel3 = new JPanel();
-		panel3.setLayout(new BoxLayout(panel3, BoxLayout.Y_AXIS));
-		// panel3.add(red);
-		// panel3.add(green);
-		panel3.add(useAsMaskCheck);
-		panel.add(panel3);
+		panel.add(useAsMaskCheck);
 
 		visibleFrame = new JPanel() {
 			private static final long serialVersionUID = 1L;
@@ -584,10 +675,11 @@ public class Video {
 		showFiltered = value;
 		viewFiltered.setSelected(value);
 		if (showFiltered) {
-			if (slider.getValue() > frameCount - 2) {
-				slider.setValue(frameCount - 2);
+			int usableFrames = numberOfUsableFrames();
+			if (slider.getValue() > usableFrames) {
+				slider.setValue(usableFrames);
 			}
-			slider.setMaximum(frameCount - 2);
+			slider.setMaximum(usableFrames);
 		} else {
 			slider.setMaximum(frameCount - 1);
 		}
