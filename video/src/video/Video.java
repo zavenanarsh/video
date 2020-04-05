@@ -454,56 +454,87 @@ public class Video {
 	}
 
 	public BufferedImage process(ArrayList<BufferedImage> src, int sample, double gamma) {
-		int width = src.get(0).getWidth();
-		int height = src.get(0).getHeight();
 
 		BufferedImage out = new BufferedImage(width / sample, height / sample, src.get(0).getType());
+		ArrayList<Thread> threads = new ArrayList<>();
+		for (int i = 0; i < cores; i++) {
+			final int proxyHeight = height / sample;
+			final int rowHeight = proxyHeight / cores;
+			final int index = i;
+			Thread thread = new Thread() {
+				@Override
+				public void run() {
 
-		for (int y = 0; y < height / sample; y++) {
-			for (int x = 0; x < width / sample; x++) {
-				if (Thread.interrupted())
-					return out;
+					int yMin = rowHeight * index;
+					int yMax = rowHeight * (index + 1);
+					if (index == cores - 1) {
+						yMax = proxyHeight;
+					}
 
-				// temporal averaging
-				int r1, g1, b1, r2, g2, b2;
-				r1 = g1 = b1 = r2 = g2 = b2 = 0;
-				for (int i = 0; i < src.size() - diffFrames; i++) {
-					Color pixel = new Color(src.get(i).getRGB(x * sample, y * sample));
-					r1 += pixel.getRed();
-					g1 += pixel.getGreen();
-					b1 += pixel.getBlue();
+					for (int y = yMin; y < yMax; y++) {
+						for (int x = 0; x < width / sample; x++) {
+							if (Thread.interrupted())
+								return;
+
+							// temporal averaging
+							int r1, g1, b1, r2, g2, b2;
+							r1 = g1 = b1 = r2 = g2 = b2 = 0;
+							for (int i = 0; i < src.size() - diffFrames; i++) {
+								Color pixel = new Color(src.get(i).getRGB(x * sample, y * sample));
+								r1 += pixel.getRed();
+								g1 += pixel.getGreen();
+								b1 += pixel.getBlue();
+							}
+							for (int i = diffFrames; i < src.size(); i++) {
+								Color pixel = new Color(src.get(i).getRGB(x * sample, y * sample));
+								r2 += pixel.getRed();
+								g2 += pixel.getGreen();
+								b2 += pixel.getBlue();
+							}
+							r1 /= src.size() - diffFrames;
+							g1 /= src.size() - diffFrames;
+							b1 /= src.size() - diffFrames;
+							r2 /= src.size() - diffFrames;
+							g2 /= src.size() - diffFrames;
+							b2 /= src.size() - diffFrames;
+
+							int r = Math.abs(r1 - r2);
+							int g = Math.abs(g1 - g2);
+							int b = Math.abs(b1 - b2);
+
+							r = (int) (Math.pow(r / 255.0, 1 / gamma) * 255);
+							g = (int) (Math.pow(g / 255.0, 1 / gamma) * 255);
+							b = (int) (Math.pow(b / 255.0, 1 / gamma) * 255);
+
+							if (useAsMask) {
+								Color pixel = new Color(src.get(src.size() / 2).getRGB(x * sample, y * sample));
+								r = (int) ((r / 255.0) * pixel.getRed());
+								g = (int) ((g / 255.0) * pixel.getGreen());
+								b = (int) ((b / 255.0) * pixel.getBlue());
+							}
+
+							Color pixelOut = new Color(clamp(r), clamp(g), clamp(b));
+
+							out.setRGB(x, y, pixelOut.getRGB());
+						}
+					}
 				}
-				for (int i = diffFrames; i < src.size(); i++) {
-					Color pixel = new Color(src.get(i).getRGB(x * sample, y * sample));
-					r2 += pixel.getRed();
-					g2 += pixel.getGreen();
-					b2 += pixel.getBlue();
+			};
+			threads.add(thread);
+			thread.start();
+		}
+
+		// wait for threads to finish
+		boolean allAlive = true;
+		while (allAlive) {
+			boolean allDead = true;
+			for (int i = 0; i < threads.size(); i++) {
+				if (threads.get(i).isAlive()) {
+					allDead = false;
 				}
-				r1 /= src.size() - diffFrames;
-				g1 /= src.size() - diffFrames;
-				b1 /= src.size() - diffFrames;
-				r2 /= src.size() - diffFrames;
-				g2 /= src.size() - diffFrames;
-				b2 /= src.size() - diffFrames;
-
-				int r = Math.abs(r1 - r2);
-				int g = Math.abs(g1 - g2);
-				int b = Math.abs(b1 - b2);
-
-				r = (int) (Math.pow(r / 255.0, 1 / gamma) * 255);
-				g = (int) (Math.pow(g / 255.0, 1 / gamma) * 255);
-				b = (int) (Math.pow(b / 255.0, 1 / gamma) * 255);
-
-				if (useAsMask) {
-					Color pixel = new Color(src.get(0).getRGB(x * sample, y * sample));
-					r = (int) ((r / 255.0) * pixel.getRed());
-					g = (int) ((g / 255.0) * pixel.getGreen());
-					b = (int) ((b / 255.0) * pixel.getBlue());
-				}
-
-				Color pixelOut = new Color(clamp(r), clamp(g), clamp(b));
-
-				out.setRGB(x, y, pixelOut.getRGB());
+			}
+			if (allDead) {
+				allAlive = false;
 			}
 		}
 		return out;
@@ -704,5 +735,4 @@ public class Video {
 		int cy = panel.getSize().height / 2 - newHeight / 2;
 		g.drawImage(showFrame, cx, cy, newWidth, newHeight, panel); // see javadoc for more info on the parameters
 	}
-
 }
