@@ -86,6 +86,8 @@ public class Video {
 
 	Thread showFrameThread;
 
+	int cores;
+
 	public static void main(String[] args) {
 		new Video();
 	}
@@ -110,6 +112,10 @@ public class Video {
 		sampleSlider.setEnabled(false);
 		fullResCache.setEnabled(false);
 		saveButton.setEnabled(false);
+		multiFrameSlider.setEnabled(false);
+		diffFrameSlider.setEnabled(false);
+
+		cores = Runtime.getRuntime().availableProcessors();
 
 		UI();
 	}
@@ -128,6 +134,8 @@ public class Video {
 		gammaSlider.setEnabled(true);
 		sampleSlider.setEnabled(true);
 		fullResCache.setEnabled(true);
+		multiFrameSlider.setEnabled(true);
+		diffFrameSlider.setEnabled(true);
 	}
 
 	public void diskCaching() {
@@ -140,33 +148,20 @@ public class Video {
 		gammaSlider.setEnabled(false);
 		sampleSlider.setEnabled(false);
 		fullResCache.setEnabled(false);
+		multiFrameSlider.setEnabled(false);
+		diffFrameSlider.setEnabled(false);
 		fullResCache.setText("Processing...");
 	}
 
 	public void doneDiskCaching() {
 		saveButton.setEnabled(true);
-		red.setEnabled(false);
-		green.setEnabled(false);
-		useAsMaskCheck.setEnabled(false);
-		viewFiltered.setEnabled(false);
 		slider.setEnabled(true);
-		gammaSlider.setEnabled(false);
-		sampleSlider.setEnabled(false);
-		fullResCache.setEnabled(false);
 		fullResCache.setText("Done Full Res Disk Cache");
 	}
 
 	public void saving() {
 		saveButton.setEnabled(false);
 		saveButton.setText("Saving...");
-		red.setEnabled(false);
-		green.setEnabled(false);
-		useAsMaskCheck.setEnabled(false);
-		viewFiltered.setEnabled(false);
-		slider.setEnabled(false);
-		gammaSlider.setEnabled(false);
-		sampleSlider.setEnabled(false);
-		fullResCache.setEnabled(false);
 	}
 
 	public int numberOfUsableFrames() {
@@ -183,10 +178,10 @@ public class Video {
 			@Override
 			public void stateChanged(ChangeEvent e) {
 				stackFrames = newSlider.getValue();
-				diffFrameSlider.setMaximum(stackFrames-1);
+				diffFrameSlider.setMaximum(stackFrames - 1);
 				if (diffFrameSlider.getValue() > diffFrameSlider.getMaximum()) {
 					diffFrameSlider.setValue(diffFrameSlider.getMaximum());
-				} 
+				}
 				if (showFiltered) {
 					int usableFrames = numberOfUsableFrames();
 					slider.setMaximum(usableFrames);
@@ -201,7 +196,7 @@ public class Video {
 	}
 
 	public JSlider initDiffFrameSlider() {
-		JSlider newSlider = new JSlider(1, stackFrames-1);
+		JSlider newSlider = new JSlider(1, stackFrames - 1);
 
 		newSlider.setValue(1);
 		diffFrames = 1;
@@ -376,30 +371,33 @@ public class Video {
 			@Override
 			public void run() {
 				try {
-					frames.add(ImageIO.read(new File(tempPath + "\\in-0.png")));
+					for (int i = 0; i < stackFrames - 1; i++) {
+						frames.add(ImageIO.read(new File(tempPath + "\\in-" + i + ".png")));
+					}
 
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
 				System.out.println("Starting to process frames --------------------------");
-				for (int i = 0; i < frameCount - 1; i++) {
+				for (int i = stackFrames - 1; i < frameCount; i++) {
+					int currentFrameIndex = i - stackFrames + 1;
 					try {
 
-						frames.add(ImageIO.read(new File(tempPath + "\\in-" + (i + 1) + ".png")));
+						frames.add(ImageIO.read(new File(tempPath + "\\in-" + i + ".png")));
 
-						while (frames.size() > 2) {
+						while (frames.size() > stackFrames) {
 							frames.remove(0);
 						}
 
-						File outputFile = new File(tempPath + "\\out-" + i + ".png");
+						File outputFile = new File(tempPath + "\\out-" + currentFrameIndex + ".png");
 						ImageIO.write(process(frames, 1, gamma), "png", outputFile);
 
-						slider.setValue(i);
+						slider.setValue(currentFrameIndex);
 					} catch (IOException e) {
 						e.printStackTrace();
 					}
 
-					System.out.println("Processing frame " + (i + 1) + " of " + (frameCount - 1));
+					System.out.println("Processing frame " + currentFrameIndex + " of " + numberOfUsableFrames());
 				}
 				System.out.println("Done!");
 				doneDiskCaching();
@@ -438,7 +436,7 @@ public class Video {
 				VideoWriter videoWriter = new VideoWriter(path + "\\output.avi", VideoWriter.fourcc('x', '2', '6', '4'),
 						fps, new Size(width, height));
 
-				for (int i = 0; i < frameCount - 1; i++) {
+				for (int i = 0; i < numberOfUsableFrames(); i++) {
 					try {
 						Mat mat = Imgcodecs.imread(tempPath + "\\out-" + i + ".png");
 						videoWriter.write(mat);
@@ -554,7 +552,7 @@ public class Video {
 		panel1.add(multiFrameText);
 		panel1.add(multiFrameSlider);
 		panel2.add(panel1);
-		
+
 		panel1 = new JPanel();
 		panel1.add(deltaText);
 		panel1.add(diffFrameSlider);
